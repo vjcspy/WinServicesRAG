@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{73722119-B26B-4DD3-929B-688495E353AD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WorkerService", "src\WorkerService\WorkerService.csproj", "{4CB13040-AE02-4C16-892D-E9AB82608A8D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WatchDogService", "src\WatchDogService\WatchDogService.csproj", "{4882AE70-0A43-40AB-9486-74FBE34EB13E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4CB13040-AE02-4C16-892D-E9AB82608A8D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4CB13040-AE02-4C16-892D-E9AB82608A8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4CB13040-AE02-4C16-892D-E9AB82608A8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4CB13040-AE02-4C16-892D-E9AB82608A8D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4882AE70-0A43-40AB-9486-74FBE34EB13E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4882AE70-0A43-40AB-9486-74FBE34EB13E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4882AE70-0A43-40AB-9486-74FBE34EB13E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4882AE70-0A43-40AB-9486-74FBE34EB13E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4CB13040-AE02-4C16-892D-E9AB82608A8D} = {73722119-B26B-4DD3-929B-688495E353AD}
+		{4882AE70-0A43-40AB-9486-74FBE34EB13E} = {73722119-B26B-4DD3-929B-688495E353AD}
+	EndGlobalSection
+EndGlobal
