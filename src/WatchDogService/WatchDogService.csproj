@@ -4,7 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>dotnet-WatchDogService-e2faa216-18c0-461d-a8be-bc69dffc21de</UserSecretsId>
+    <UserSecretsId>dotnet-WatchdogService-4793b8b3-3d55-4280-aa47-aad3c7cd5af3</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

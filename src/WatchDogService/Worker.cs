@@ -1,4 +1,4 @@
-namespace WatchDogService;
+namespace WatchdogService;
 
 public class Worker : BackgroundService
 {
