@@ -155,13 +155,13 @@ public class ScreenshotManager : IDisposable
     {
         // Add providers in order of preference
         // 1. DirectX Desktop Duplication API - Best performance and compatibility for Windows 11
-        _providers.Add(new DirectXScreenshotProvider(_logger));
+        _providers.Add(new DirectXScreenshotProvider(_logger!));
 
         // 2. Windows Graphics Capture API - Modern but currently disabled due to .NET compatibility
-        _providers.Add(new WindowsGraphicsCaptureProvider(_logger));
+        _providers.Add(new WindowsGraphicsCaptureProvider(_logger!));
 
         // 3. WinAPI (BitBlt) - Fallback, works everywhere but limited capability
-        _providers.Add(new WinApiScreenshotProvider(_logger));
+        _providers.Add(new WinApiScreenshotProvider(_logger!));
 
         _logger?.LogInformation("Initialized {ProviderCount} screenshot providers", _providers.Count);
     }

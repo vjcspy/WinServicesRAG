@@ -47,19 +47,20 @@ public class Worker : BackgroundService
 
             // Test 1: Get provider status
             _logger.LogInformation("--- Provider Availability Test ---");
-            var providerStatus = _screenshotManager.GetProviderStatus2();
-            foreach (var status in providerStatus)
+            var providerStatus = _screenshotManager.GetProviderStatus();
+            foreach (var (name, isAvailable) in providerStatus)
             {
-                _logger.LogInformation("Provider: {Name}, Available: {Available}, Error: {Error}",
-                    status.Name, status.IsAvailable, status.ErrorMessage ?? "None");
+                _logger.LogInformation("Provider: {Name}, Available: {Available}",
+                    name, isAvailable);
             }
 
-            for (var i = 0; i < providerStatus.Count; i++)
+            foreach (var (name, isAvailable) in providerStatus)
             {
-                var screenshot = _screenshotManager.TakeScreenshotWithProvider(providerStatus[i].Name);
+                if (!isAvailable) continue;
+                var screenshot = _screenshotManager.TakeScreenshotWithProvider(name);
                 if (screenshot != null)
                 {
-                    string fileName = $"_test_screenshot_{providerStatus[i].Name.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                    string fileName = $"_test_screenshot_{name.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
                     string filePath = Path.Combine(testDir, fileName);
 
                     await File.WriteAllBytesAsync(filePath, screenshot);
@@ -68,7 +69,7 @@ public class Worker : BackgroundService
                 }
                 else
                 {
-                    _logger.LogWarning("❌ Screenshot capture failed for provider {ProviderName}", providerStatus[i].Name);
+                    _logger.LogWarning("❌ Screenshot capture failed for provider {ProviderName}", name);
                 }
             }
 

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-
 namespace WinServicesRAG.Core.Screenshot;
 
 /// <summary>
@@ -8,24 +7,24 @@ namespace WinServicesRAG.Core.Screenshot;
 ///     Currently disabled due to .NET compatibility issues with Windows Runtime.
 ///     TODO: Implement using CsWinRT projections when available.
 /// </summary>
-public class WindowsGraphicsCaptureProvider : IScreenshotProvider, IDisposable
+public class WindowsGraphicsCaptureProvider(ILogger logger) : IScreenshotProvider, IDisposable
 {
-    private readonly ILogger? _logger;
     private bool _isDisposed;
 
-    public WindowsGraphicsCaptureProvider(ILogger? logger = null)
+    public string ProviderName
     {
-        _logger = logger;
+        get
+        {
+            return "Windows Graphics Capture API (Disabled)";
+        }
     }
-
-    public string ProviderName => "Windows Graphics Capture API (Disabled)";
 
     public void Dispose()
     {
         if (!_isDisposed)
         {
             _isDisposed = true;
-            GC.SuppressFinalize(this);
+            GC.SuppressFinalize(obj: this);
         }
     }
 
@@ -33,13 +32,13 @@ public class WindowsGraphicsCaptureProvider : IScreenshotProvider, IDisposable
     {
         // Currently disabled due to Windows Runtime compatibility issues in .NET 9
         // TODO: Re-enable when proper CsWinRT support is available
-        _logger?.LogWarning("Windows Graphics Capture API is currently disabled due to .NET compatibility issues");
+        logger?.LogWarning(message: "Windows Graphics Capture API is currently disabled due to .NET compatibility issues");
         return false;
     }
 
     public byte[]? TakeScreenshot()
     {
-        _logger?.LogWarning("Windows Graphics Capture API is currently disabled");
+        logger?.LogWarning(message: "Windows Graphics Capture API is currently disabled");
         return null;
     }
 

@@ -1,31 +1,34 @@
-using Vortice.Direct3D11;
-using Vortice.DXGI;
+using Microsoft.Extensions.Logging;
+using SharpGen.Runtime;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using Microsoft.Extensions.Logging;
-
+using Vortice.Direct3D;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
+using MapFlags = Vortice.Direct3D11.MapFlags;
+using ResultCode = Vortice.DXGI.ResultCode;
 namespace WinServicesRAG.Core.Screenshot;
 
 /// <summary>
 ///     DirectX Desktop Duplication API provider using modern Vortice.Windows.
-///     High performance, captures almost everything including full-screen apps.
-///     Optimized for Windows 11 with modern DirectX wrapper.
+///     High performance captures almost everything, including full-screen apps.
+///     Optimized for Windows 11 with a modern DirectX wrapper.
 /// </summary>
-public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
+public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
 {
     private ID3D11Device? _device;
     private ID3D11DeviceContext? _deviceContext;
     private bool _isDisposed;
     private IDXGIOutputDuplication? _outputDuplication;
-    private readonly ILogger? _logger;
 
-    public DirectXScreenshotProvider(ILogger? logger = null)
+    public string ProviderName
     {
-        _logger = logger;
+        get
+        {
+            return "DirectX";
+        }
     }
-
-    public string ProviderName => "DirectX Desktop Duplication API (Vortice.Windows)";
 
     public void Dispose()
     {
@@ -41,128 +44,126 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         _device = null;
 
         _isDisposed = true;
-        GC.SuppressFinalize(this);
+        GC.SuppressFinalize(obj: this);
     }
 
     public bool IsAvailable()
     {
         try
         {
-            // Check current session info
-            uint sessionId = GetCurrentSessionId();
-            _logger?.LogDebug("Current session ID: {SessionId}", sessionId);
-
-            // Session 0 is the system session - DirectX Desktop Duplication doesn't work there
-            if (sessionId == 0)
-            {
-                _logger?.LogWarning("DirectX Desktop Duplication API not available in Session 0 (system session)");
-                return false;
-            }
+            // // Check current session info
+            // uint sessionId = GetCurrentSessionId();
+            // _logger?.LogDebug(message: "Current session ID: {SessionId}", sessionId);
+            //
+            // // Session 0 is the system session - DirectX Desktop Duplication doesn't work there
+            // if (sessionId == 0)
+            // {
+            //     _logger?.LogWarning(message: "DirectX Desktop Duplication API not available in Session 0 (system session)");
+            //     return false;
+            // }
 
             // Try to initialize DirectX components
             InitializeDirectX();
             bool isAvailable = _outputDuplication != null;
-            
-            _logger?.LogInformation("DirectX Desktop Duplication API availability: {IsAvailable}", isAvailable);
+
+            logger?.LogInformation(message: "DirectX Desktop Duplication API availability: {IsAvailable}", isAvailable);
             return isAvailable;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to check DirectX availability");
+            logger?.LogError(exception: ex, message: "Failed to check DirectX availability");
             return false;
         }
     }
 
     public byte[]? TakeScreenshot()
     {
+        logger.LogInformation(message: "Taking screenshot using DirectX Desktop Duplication API");
         try
         {
             if (_outputDuplication == null)
             {
-                _logger?.LogWarning("DirectX not initialized, attempting to initialize...");
+                logger?.LogWarning(message: "DirectX not initialized, attempting to initialize...");
                 InitializeDirectX();
             }
 
             if (_device == null || _outputDuplication == null || _deviceContext == null)
             {
-                _logger?.LogError("DirectX components not properly initialized");
+                logger?.LogError(message: "DirectX components not properly initialized");
                 return null;
             }
 
-            _logger?.LogDebug("Attempting to acquire frame from DirectX Desktop Duplication API");
+            logger?.LogDebug(message: "Attempting to acquire frame from DirectX Desktop Duplication API");
 
-            // Try to acquire next frame
-            var result = _outputDuplication.AcquireNextFrame(5000, out var frameInfo, out var desktopResource);
-            
+            // Try to acquire the next frame
+            Result result = _outputDuplication.AcquireNextFrame(timeoutInMilliseconds: 5000, frameInfo: out OutduplFrameInfo _frameInfo, desktopResource: out IDXGIResource? desktopResource);
+
             if (result.Failure)
             {
-                if (result == Vortice.DXGI.ResultCode.AccessLost)
+                if (result == ResultCode.AccessLost)
                 {
-                    _logger?.LogWarning("Access lost, attempting to reinitialize DirectX");
+                    logger?.LogWarning(message: "Access lost, attempting to reinitialize DirectX");
                     ReinitializeDirectX();
                     return null;
                 }
-                else if (result == Vortice.DXGI.ResultCode.WaitTimeout)
+                if (result == ResultCode.WaitTimeout)
                 {
-                    _logger?.LogDebug("No new frame available (timeout)");
+                    logger?.LogDebug(message: "No new frame available (timeout)");
                     return null;
                 }
-                else if (result == Vortice.DXGI.ResultCode.InvalidCall)
+                if (result == ResultCode.InvalidCall)
                 {
-                    _logger?.LogError("Invalid call to AcquireNextFrame");
+                    logger?.LogError(message: "Invalid call to AcquireNextFrame");
                     return null;
                 }
-                else
-                {
-                    _logger?.LogError("Failed to acquire frame: {Result}", result);
-                    return null;
-                }
+                logger?.LogError(message: "Failed to acquire frame: {Result}", result);
+                return null;
             }
 
             try
             {
                 using (desktopResource)
                 {
-                    var desktopImage = desktopResource.QueryInterface<ID3D11Texture2D>();
+                    ID3D11Texture2D? desktopImage = desktopResource.QueryInterface<ID3D11Texture2D>();
                     using (desktopImage)
                     {
                         if (desktopImage == null)
                         {
-                            _logger?.LogError("Failed to query desktop texture interface");
+                            logger?.LogError(message: "Failed to query desktop texture interface");
                             return null;
                         }
 
-                        var textureDesc = desktopImage.Description;
-                        
+                        Texture2DDescription textureDesc = desktopImage.Description;
+
                         // Create a staging texture to read the data
-                        var stagingDesc = new Texture2DDescription
+                        Texture2DDescription stagingDesc = new Texture2DDescription
                         {
                             Width = textureDesc.Width,
                             Height = textureDesc.Height,
                             MipLevels = 1,
                             ArraySize = 1,
                             Format = textureDesc.Format,
-                            SampleDescription = new SampleDescription(1, 0),
+                            SampleDescription = new SampleDescription(count: 1, quality: 0),
                             Usage = ResourceUsage.Staging,
                             CPUAccessFlags = CpuAccessFlags.Read,
                             MiscFlags = ResourceOptionFlags.None
                         };
 
-                        using var stagingTexture = _device.CreateTexture2D(stagingDesc);
-                        
+                        using ID3D11Texture2D stagingTexture = _device.CreateTexture2D(description: stagingDesc);
+
                         // Copy desktop image to staging texture
-                        _deviceContext.CopyResource(stagingTexture, desktopImage);
+                        _deviceContext.CopyResource(dstResource: stagingTexture, srcResource: desktopImage);
 
                         // Map the staging texture to read pixel data
-                        var mappedResource = _deviceContext.Map(stagingTexture, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
-                        
+                        MappedSubresource mappedResource = _deviceContext.Map(resource: stagingTexture, subresource: 0, mode: MapMode.Read, flags: MapFlags.None);
+
                         try
                         {
-                            return ConvertToImage(mappedResource, textureDesc.Width, textureDesc.Height);
+                            return ConvertToImage(mappedResource: mappedResource, width: textureDesc.Width, height: textureDesc.Height);
                         }
                         finally
                         {
-                            _deviceContext.Unmap(stagingTexture, 0);
+                            _deviceContext.Unmap(resource: stagingTexture, subresource: 0);
                         }
                     }
                 }
@@ -174,7 +175,7 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to capture screenshot using DirectX");
+            logger?.LogError(exception: ex, message: "Failed to capture screenshot using DirectX");
             return null;
         }
     }
@@ -185,37 +186,37 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         {
             // Create D3D11 device
             D3D11.D3D11CreateDevice(
-                null,
-                Vortice.Direct3D.DriverType.Hardware,
-                DeviceCreationFlags.None,
-                null,
-                out _device,
-                out _deviceContext);
+                adapter: null,
+                driverType: DriverType.Hardware,
+                flags: DeviceCreationFlags.None,
+                featureLevels: null!,
+                device: out _device,
+                immediateContext: out _deviceContext);
 
             // Get DXGI device
-            using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
-            using var dxgiAdapter = dxgiDevice.GetAdapter();
-            
+            using IDXGIDevice dxgiDevice = _device.QueryInterface<IDXGIDevice>();
+            using IDXGIAdapter dxgiAdapter = dxgiDevice.GetAdapter();
+
             // Get the first output (primary display)
-            var result = dxgiAdapter.EnumOutputs(0, out var dxgiOutput);
+            Result result = dxgiAdapter.EnumOutputs(output: 0, outputOut: out IDXGIOutput? dxgiOutput);
             if (result.Failure || dxgiOutput == null)
             {
-                throw new InvalidOperationException("Failed to enumerate DXGI outputs");
+                throw new InvalidOperationException(message: "Failed to enumerate DXGI outputs");
             }
-            
+
             using (dxgiOutput)
             {
-                using var dxgiOutput1 = dxgiOutput.QueryInterface<IDXGIOutput1>();
+                using IDXGIOutput1 dxgiOutput1 = dxgiOutput.QueryInterface<IDXGIOutput1>();
 
                 // Duplicate the output
-                _outputDuplication = dxgiOutput1.DuplicateOutput(_device);
+                _outputDuplication = dxgiOutput1.DuplicateOutput(device: _device);
             }
-            
-            _logger?.LogInformation("DirectX Desktop Duplication API initialized successfully");
+
+            logger?.LogInformation(message: "DirectX Desktop Duplication API initialized successfully");
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to initialize DirectX");
+            logger?.LogError(exception: ex, message: "Failed to initialize DirectX");
             Dispose();
             throw;
         }
@@ -225,14 +226,14 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
     {
         try
         {
-            _logger?.LogInformation("Reinitializing DirectX Desktop Duplication API");
-            
+            logger?.LogInformation(message: "Reinitializing DirectX Desktop Duplication API");
+
             _outputDuplication?.Dispose();
             _outputDuplication = null;
-            
+
             _deviceContext?.Dispose();
             _deviceContext = null;
-            
+
             _device?.Dispose();
             _device = null;
 
@@ -240,44 +241,44 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to reinitialize DirectX");
+            logger?.LogError(exception: ex, message: "Failed to reinitialize DirectX");
         }
     }
 
     private unsafe byte[] ConvertToImage(MappedSubresource mappedResource, int width, int height)
     {
-        using var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-        var bitmapData = bitmap.LockBits(
-            new Rectangle(0, 0, width, height),
-            ImageLockMode.WriteOnly,
-            PixelFormat.Format32bppArgb);
+        using Bitmap bitmap = new Bitmap(width: width, height: height, format: PixelFormat.Format32bppArgb);
+        BitmapData bitmapData = bitmap.LockBits(
+            rect: new Rectangle(x: 0, y: 0, width: width, height: height),
+            flags: ImageLockMode.WriteOnly,
+            format: PixelFormat.Format32bppArgb);
 
         try
         {
-            var sourcePtr = mappedResource.DataPointer;
-            var destPtr = bitmapData.Scan0;
-            var sourceRowPitch = mappedResource.RowPitch;
-            var destRowPitch = bitmapData.Stride;
+            IntPtr sourcePtr = mappedResource.DataPointer;
+            IntPtr destPtr = bitmapData.Scan0;
+            int sourceRowPitch = mappedResource.RowPitch;
+            int destRowPitch = bitmapData.Stride;
 
             for (int row = 0; row < height; row++)
             {
                 Buffer.MemoryCopy(
-                    (void*)(sourcePtr + row * sourceRowPitch),
-                    (void*)(destPtr + row * destRowPitch),
-                    destRowPitch,
-                    Math.Min(sourceRowPitch, destRowPitch));
+                    source: (void*)(sourcePtr + row * sourceRowPitch),
+                    destination: (void*)(destPtr + row * destRowPitch),
+                    destinationSizeInBytes: destRowPitch,
+                    sourceBytesToCopy: Math.Min(val1: sourceRowPitch, val2: destRowPitch));
             }
         }
         finally
         {
-            bitmap.UnlockBits(bitmapData);
+            bitmap.UnlockBits(bitmapdata: bitmapData);
         }
 
-        using var memoryStream = new MemoryStream();
-        bitmap.Save(memoryStream, ImageFormat.Png);
+        using MemoryStream memoryStream = new MemoryStream();
+        bitmap.Save(stream: memoryStream, format: ImageFormat.Png);
         return memoryStream.ToArray();
     }
 
-    [DllImport("kernel32.dll")]
+    [DllImport(dllName: "kernel32.dll")]
     private static extern uint GetCurrentSessionId();
 }

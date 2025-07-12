@@ -1,11 +1,38 @@
 using WorkerService;
 using WinServicesRAG.Core.Screenshot;
+using Serilog;
 
-var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddHostedService<Worker>();
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
+    .WriteTo.Console()
+    .WriteTo.File("logs/worker-service-.log", 
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 7)
+    .CreateLogger();
 
-// Register screenshot services
-builder.Services.AddSingleton<ScreenshotManager>();
+try
+{
+    var builder = Host.CreateApplicationBuilder(args);
+    
+    // Use Serilog as the logging provider
+    builder.Services.AddSerilog();
+    
+    builder.Services.AddHostedService<Worker>();
 
-var host = builder.Build();
-host.Run();
+    // Register screenshot services
+    builder.Services.AddSingleton<ScreenshotManager>();
+
+    var host = builder.Build();
+    
+    Log.Information("WorkerService starting...");
+    await host.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "WorkerService terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
