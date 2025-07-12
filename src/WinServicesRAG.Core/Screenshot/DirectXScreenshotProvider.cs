@@ -78,106 +78,148 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
 
     public byte[]? TakeScreenshot()
     {
-        logger.LogInformation(message: "Taking screenshot using DirectX Desktop Duplication API");
+        logger.LogInformation(message: "Taking screenshot using DirectX Desktop Duplication API.");
         try
         {
+            // Đảm bảo DirectX được khởi tạo. Nếu không, cố gắng khởi tạo.
+            // Đây là điểm khởi tạo "On-demand"
             if (_outputDuplication == null)
             {
                 logger?.LogWarning(message: "DirectX not initialized, attempting to initialize...");
-                InitializeDirectX();
+                try
+                {
+                    InitializeDirectX();
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError(exception: ex, message: "Failed to initialize DirectX during screenshot attempt.");
+                    return null;
+                }
             }
 
             if (_device == null || _outputDuplication == null || _deviceContext == null)
             {
-                logger?.LogError(message: "DirectX components not properly initialized");
+                logger?.LogError(message: "DirectX components not properly initialized after attempt.");
                 return null;
             }
 
-            logger?.LogDebug(message: "Attempting to acquire frame from DirectX Desktop Duplication API");
-
-            // Try to acquire the next frame
-            Result result = _outputDuplication.AcquireNextFrame(timeoutInMilliseconds: 5000, frameInfo: out OutduplFrameInfo _frameInfo, desktopResource: out IDXGIResource? desktopResource);
-
-            if (result.Failure)
-            {
-                if (result == ResultCode.AccessLost)
-                {
-                    logger?.LogWarning(message: "Access lost, attempting to reinitialize DirectX");
-                    ReinitializeDirectX();
-                    return null;
-                }
-                if (result == ResultCode.WaitTimeout)
-                {
-                    logger?.LogDebug(message: "No new frame available (timeout)");
-                    return null;
-                }
-                if (result == ResultCode.InvalidCall)
-                {
-                    logger?.LogError(message: "Invalid call to AcquireNextFrame");
-                    return null;
-                }
-                logger?.LogError(message: "Failed to acquire frame: {Result}", result);
-                return null;
-            }
+            IDXGIResource? desktopResource = null;
+            ID3D11Texture2D? desktopImage = null;
+            ID3D11Texture2D? stagingTexture = null;
+            MappedSubresource mappedResource = default(MappedSubresource);
+            byte[]? imageData = null;
 
             try
             {
-                using (desktopResource)
+                logger?.LogDebug(message: "Attempting to acquire frame from DirectX Desktop Duplication API.");
+
+                // Loop để thử lấy frame, xử lý AccessLost
+                for (int i = 0; i < 2; i++) // Thử lại 1 lần nếu AccessLost
                 {
-                    ID3D11Texture2D? desktopImage = desktopResource.QueryInterface<ID3D11Texture2D>();
-                    using (desktopImage)
+                    Result result = _outputDuplication.AcquireNextFrame(
+                        timeoutInMilliseconds: 500, // Giảm timeout để phản hồi nhanh hơn nếu không có frame
+                        frameInfo: out OutduplFrameInfo frameInfo,
+                        desktopResource: out desktopResource);
+
+                    if (result.Success)
                     {
-                        if (desktopImage == null)
+                        logger?.LogDebug(message: "Successfully acquired frame.");
+                        break; // Thành công, thoát vòng lặp
+                    }
+                    if (result == ResultCode.AccessLost)
+                    {
+                        logger?.LogWarning(message: "Access lost, attempting to reinitialize DirectX.");
+                        ReinitializeDirectX();
+                        if (_outputDuplication == null) // Reinitialization failed
                         {
-                            logger?.LogError(message: "Failed to query desktop texture interface");
+                            logger?.LogError(message: "DirectX reinitialization failed after AccessLost.");
                             return null;
                         }
-
-                        Texture2DDescription textureDesc = desktopImage.Description;
-
-                        // Create a staging texture to read the data
-                        Texture2DDescription stagingDesc = new Texture2DDescription
-                        {
-                            Width = textureDesc.Width,
-                            Height = textureDesc.Height,
-                            MipLevels = 1,
-                            ArraySize = 1,
-                            Format = textureDesc.Format,
-                            SampleDescription = new SampleDescription(count: 1, quality: 0),
-                            Usage = ResourceUsage.Staging,
-                            CPUAccessFlags = CpuAccessFlags.Read,
-                            MiscFlags = ResourceOptionFlags.None
-                        };
-
-                        using ID3D11Texture2D stagingTexture = _device.CreateTexture2D(description: stagingDesc);
-
-                        // Copy desktop image to staging texture
-                        _deviceContext.CopyResource(dstResource: stagingTexture, srcResource: desktopImage);
-
-                        // Map the staging texture to read pixel data
-                        MappedSubresource mappedResource = _deviceContext.Map(resource: stagingTexture, subresource: 0, mode: MapMode.Read, flags: MapFlags.None);
-
-                        try
-                        {
-                            return ConvertToImage(mappedResource: mappedResource, width: textureDesc.Width, height: textureDesc.Height);
-                        }
-                        finally
-                        {
-                            _deviceContext.Unmap(resource: stagingTexture, subresource: 0);
-                        }
+                    }
+                    else if (result == ResultCode.WaitTimeout)
+                    {
+                        logger?.LogDebug(message: "No new frame available (timeout).");
+                        return null;
+                    }
+                    else
+                    {
+                        logger?.LogError(message: "Failed to acquire frame: {Result}", result);
+                        return null;
                     }
                 }
+
+                // Nếu desktopResource vẫn null sau vòng lặp, có nghĩa là không lấy được frame
+                if (desktopResource == null)
+                {
+                    logger?.LogError(message: "Desktop resource is null after acquiring frame attempts.");
+                    return null;
+                }
+
+                desktopImage = desktopResource.QueryInterface<ID3D11Texture2D>();
+                if (desktopImage == null)
+                {
+                    logger?.LogError(message: "Failed to query desktop texture interface.");
+                    return null;
+                }
+
+                Texture2DDescription textureDesc = desktopImage.Description;
+
+                // Tạo staging texture
+                Texture2DDescription stagingDesc = new Texture2DDescription
+                {
+                    Width = textureDesc.Width,
+                    Height = textureDesc.Height,
+                    MipLevels = 1,
+                    ArraySize = 1,
+                    Format = textureDesc.Format, // Sử dụng định dạng của DesktopImage
+                    SampleDescription = new SampleDescription(count: 1, quality: 0),
+                    Usage = ResourceUsage.Staging,
+                    CPUAccessFlags = CpuAccessFlags.Read,
+                    MiscFlags = ResourceOptionFlags.None
+                };
+
+                stagingTexture = _device.CreateTexture2D(description: stagingDesc);
+                _deviceContext.CopyResource(dstResource: stagingTexture, srcResource: desktopImage);
+
+                mappedResource = _deviceContext.Map(resource: stagingTexture, subresource: 0, mode: MapMode.Read, flags: MapFlags.None);
+
+                imageData = ConvertToImage(mappedResource: mappedResource, width: textureDesc.Width, height: textureDesc.Height);
+                return imageData;
+            }
+            catch (SharpGenException sgEx)
+            {
+                logger?.LogError(exception: sgEx, message: "SharpGen exception during DirectX screenshot.");
+                // Cân nhắc reinitialize nếu lỗi là do thiết bị bị mất/reset
+                if (sgEx.ResultCode == ResultCode.AccessLost || sgEx.ResultCode == ResultCode.DeviceRemoved || sgEx.ResultCode == ResultCode.DeviceReset)
+                {
+                    logger?.LogWarning(message: "Device lost/reset detected, attempting reinitialization.");
+                    ReinitializeDirectX();
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(exception: ex, message: "Unexpected error during DirectX screenshot.");
+                return null;
             }
             finally
             {
-                _outputDuplication.ReleaseFrame();
+                // Đảm bảo giải phóng tài nguyên một cách an toàn
+                if (mappedResource.DataPointer != IntPtr.Zero)
+                {
+                    _deviceContext?.Unmap(resource: stagingTexture, subresource: 0);
+                }
+                stagingTexture?.Dispose();
+                desktopImage?.Dispose();
+                desktopResource?.Dispose();         // Release DXGI Resource acquired
+                _outputDuplication?.ReleaseFrame(); // Quan trọng: Luôn release frame đã acquire
             }
         }
-        catch (Exception ex)
+        catch
         {
-            logger?.LogError(exception: ex, message: "Failed to capture screenshot using DirectX");
-            return null;
+            // ignored
         }
+        return null;
     }
 
     private void InitializeDirectX()
