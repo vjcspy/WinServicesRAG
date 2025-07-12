@@ -9,10 +9,10 @@ namespace WinServicesRAG.Core.Screenshot;
 public class ScreenshotManager : IDisposable
 {
     private readonly List<IScreenshotProvider> _providers;
-    private readonly ILogger? _logger;
+    private readonly ILogger _logger;
     private bool _isDisposed;
 
-    public ScreenshotManager(ILogger? logger = null)
+    public ScreenshotManager(ILogger<ScreenshotManager> logger)
     {
         _logger = logger;
         _providers = new List<IScreenshotProvider>();
@@ -32,42 +32,42 @@ public class ScreenshotManager : IDisposable
     {
         if (_isDisposed)
         {
-            _logger?.LogError("ScreenshotManager has been disposed");
+            _logger.LogError("ScreenshotManager has been disposed");
             return null;
         }
 
-        _logger?.LogDebug("Attempting to take screenshot using {ProviderCount} providers", _providers.Count);
+        _logger.LogDebug("Attempting to take screenshot using {ProviderCount} providers", _providers.Count);
 
         foreach (var provider in _providers)
         {
             try
             {
-                _logger?.LogDebug("Trying provider: {ProviderName}", provider.ProviderName);
+                _logger.LogDebug("Trying provider: {ProviderName}", provider.ProviderName);
 
                 if (!provider.IsAvailable())
                 {
-                    _logger?.LogDebug("Provider {ProviderName} is not available", provider.ProviderName);
+                    _logger.LogDebug("Provider {ProviderName} is not available", provider.ProviderName);
                     continue;
                 }
 
                 var screenshot = provider.TakeScreenshot();
                 if (screenshot != null && screenshot.Length > 0)
                 {
-                    _logger?.LogInformation("Successfully captured screenshot using {ProviderName}: {Size} bytes", 
+                    _logger.LogInformation("Successfully captured screenshot using {ProviderName}: {Size} bytes", 
                                           provider.ProviderName, screenshot.Length);
                     return screenshot;
                 }
 
-                _logger?.LogWarning("Provider {ProviderName} returned null or empty screenshot", provider.ProviderName);
+                _logger.LogWarning("Provider {ProviderName} returned null or empty screenshot", provider.ProviderName);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Provider {ProviderName} failed with exception", provider.ProviderName);
+                _logger.LogError(ex, "Provider {ProviderName} failed with exception", provider.ProviderName);
                 // Continue to next provider
             }
         }
 
-        _logger?.LogError("All screenshot providers failed");
+        _logger.LogError("All screenshot providers failed");
         return null;
     }
 
@@ -87,7 +87,7 @@ public class ScreenshotManager : IDisposable
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Failed to check availability for provider {ProviderName}", provider.ProviderName);
+                _logger.LogError(ex, "Failed to check availability for provider {ProviderName}", provider.ProviderName);
                 status[provider.ProviderName] = false;
             }
         }
@@ -107,17 +107,17 @@ public class ScreenshotManager : IDisposable
 
         if (provider == null)
         {
-            _logger?.LogError("Provider {ProviderName} not found", providerName);
+            _logger.LogError("Provider {ProviderName} not found", providerName);
             return null;
         }
 
-        _logger?.LogInformation("Using specific provider: {ProviderName}", providerName);
+        _logger.LogInformation("Using specific provider: {ProviderName}", providerName);
 
         try
         {
             if (!provider.IsAvailable())
             {
-                _logger?.LogError("Provider {ProviderName} is not available", providerName);
+                _logger.LogError("Provider {ProviderName} is not available", providerName);
                 return null;
             }
 
@@ -125,7 +125,7 @@ public class ScreenshotManager : IDisposable
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Provider {ProviderName} failed", providerName);
+            _logger.LogError(ex, "Provider {ProviderName} failed", providerName);
             return null;
         }
     }
@@ -142,7 +142,7 @@ public class ScreenshotManager : IDisposable
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error disposing provider {ProviderName}", provider.ProviderName);
+                _logger.LogError(ex, "Error disposing provider {ProviderName}", provider.ProviderName);
             }
         }
 
@@ -155,14 +155,14 @@ public class ScreenshotManager : IDisposable
     {
         // Add providers in order of preference
         // 1. DirectX Desktop Duplication API - Best performance and compatibility for Windows 11
-        _providers.Add(new DirectXScreenshotProvider(_logger!));
+        _providers.Add(new DirectXScreenshotProvider(_logger));
 
         // 2. Windows Graphics Capture API - Modern but currently disabled due to .NET compatibility
-        _providers.Add(new WindowsGraphicsCaptureProvider(_logger!));
+        _providers.Add(new WindowsGraphicsCaptureProvider(_logger));
 
         // 3. WinAPI (BitBlt) - Fallback, works everywhere but limited capability
-        _providers.Add(new WinApiScreenshotProvider(_logger!));
+        _providers.Add(new WinApiScreenshotProvider(_logger));
 
-        _logger?.LogInformation("Initialized {ProviderCount} screenshot providers", _providers.Count);
+        _logger.LogInformation("Initialized {ProviderCount} screenshot providers", _providers.Count);
     }
 }

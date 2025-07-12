@@ -92,8 +92,12 @@ try
             var hostBuilder = Host.CreateDefaultBuilder()
                 .ConfigureServices((context, services) =>
                 {
-                    // Register ScreenshotManager as singleton
-                    services.AddSingleton<ScreenshotManager>();
+                    // Register ScreenshotManager as singleton with proper logger injection
+                    services.AddSingleton<ScreenshotManager>(serviceProvider =>
+                    {
+                        var logger = serviceProvider.GetRequiredService<ILogger<ScreenshotManager>>();
+                        return new ScreenshotManager(logger);
+                    });
                     
                     // Register background service with configuration
                     services.Configure<ScreenshotServiceConfig>(config =>
@@ -136,7 +140,11 @@ try
             var hostBuilder = Host.CreateDefaultBuilder()
                 .ConfigureServices((context, services) =>
                 {
-                    services.AddSingleton<ScreenshotManager>();
+                    services.AddSingleton<ScreenshotManager>(serviceProvider =>
+                    {
+                        var logger = serviceProvider.GetRequiredService<ILogger<ScreenshotManager>>();
+                        return new ScreenshotManager(logger);
+                    });
                 })
                 .UseSerilog();
 
