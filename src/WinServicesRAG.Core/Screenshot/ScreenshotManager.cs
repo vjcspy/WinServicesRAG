@@ -158,7 +158,7 @@ public class ScreenshotManager : IDisposable
         _providers.Add(new DirectXScreenshotProvider(_logger));
 
         // 2. Windows Graphics Capture API - Modern, now implemented and working
-        _providers.Add(new WindowsGraphicsCaptureProvider(_logger));
+        _providers.Add(new GDI(_logger));
 
         // 3. WinAPI (BitBlt) - Fallback, works everywhere but limited capability
         _providers.Add(new WinApiScreenshotProvider(_logger));

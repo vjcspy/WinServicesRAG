@@ -9,7 +9,7 @@ namespace WinServicesRAG.Core.Screenshot;
 ///     Modern Windows 10+ API that allows safe and efficient screen recording.
 ///     Implemented using P/Invoke for maximum compatibility with .NET 9.
 /// </summary>
-public class WindowsGraphicsCaptureProvider(ILogger logger) : IScreenshotProvider
+public class GDI(ILogger logger) : IScreenshotProvider
 {
 
     // Windows Graphics Capture API constants and structs
@@ -23,8 +23,7 @@ public class WindowsGraphicsCaptureProvider(ILogger logger) : IScreenshotProvide
     {
         get
         {
-            // "Windows Graphics Capture API (Enhanced)"
-            return "WGCE";
+            return "GDI";
         }
     }
 
