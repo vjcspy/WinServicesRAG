@@ -1,168 +1,153 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 
 namespace WinServicesRAG.Core.Screenshot;
 
 /// <summary>
-///     Traditional Windows GDI-based screenshot provider.
-///     Most compatible but slower than hardware-accelerated alternatives.
+///     Traditional WinAPI (GDI) screenshot provider.
+///     Wide compatibility, works on all Windows versions.
+///     Uses BitBlt for desktop capture and PrintWindow for specific windows.
 /// </summary>
-public class WinApiScreenshotProvider : IScreenshotProvider
+public class WinApiScreenshotProvider : IScreenshotProvider, IDisposable
 {
-    public string ProviderName => "Windows GDI (BitBlt)";
+    private readonly ILogger? _logger;
+    private bool _isDisposed;
+
+    public WinApiScreenshotProvider(ILogger? logger = null)
+    {
+        _logger = logger;
+    }
+
+    public string ProviderName => "WinAPI (BitBlt + PrintWindow)";
 
     public void Dispose()
     {
-        // No resources to dispose for GDI provider
+        if (!_isDisposed)
+        {
+            _isDisposed = true;
+            GC.SuppressFinalize(this);
+        }
     }
 
     public bool IsAvailable()
     {
         try
         {
-            // Check current session info
-            uint sessionId = GetCurrentSessionId();
-            Console.WriteLine($"[WinAPI] Current session ID: {sessionId}");
+            // WinAPI is available on all Windows versions
+            var desktopWindow = GetDesktopWindow();
+            bool isAvailable = desktopWindow != IntPtr.Zero;
             
-            // Session 0 is the system session, user sessions are 1+
-            if (sessionId == 0)
-            {
-                Console.WriteLine("[WinAPI] WARNING: Running in Session 0 (System). GDI capture may show Session 0 desktop (usually black).");
-                Console.WriteLine("[WinAPI] This is expected for Windows Services. GDI will capture Session 0 desktop, not user desktop.");
-                // Note: We still return true because GDI can technically work in Session 0,
-                // it just captures the system session instead of user session
-            }
-
-            // GDI is always available on Windows
-            // Test by getting screen dimensions
-            int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-            int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-            
-            bool isAvailable = screenWidth > 0 && screenHeight > 0;
-            Console.WriteLine($"[WinAPI] Screen dimensions: {screenWidth}x{screenHeight}, IsAvailable: {isAvailable}");
-            
+            _logger?.LogInformation("WinAPI screenshot provider availability: {IsAvailable}", isAvailable);
             return isAvailable;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[WinAPI] IsAvailable check failed: {ex.Message}");
+            _logger?.LogError(ex, "Failed to check WinAPI availability");
             return false;
         }
     }
 
     public byte[]? TakeScreenshot()
     {
-        IntPtr hdcSrc = IntPtr.Zero;
-        IntPtr hdcDest = IntPtr.Zero;
-        IntPtr hBitmap = IntPtr.Zero;
-
         try
         {
-            Console.WriteLine("[WinAPI] Starting GDI screenshot capture...");
-
-            // Get the device context of the entire screen
-            hdcSrc = GetDC(IntPtr.Zero);
-            if (hdcSrc == IntPtr.Zero)
-            {
-                Console.WriteLine("[WinAPI] Failed to get screen device context");
-                return null;
-            }
+            _logger?.LogDebug("Attempting to capture screenshot using WinAPI BitBlt");
 
             // Get screen dimensions
             int screenWidth = GetSystemMetrics(SM_CXSCREEN);
             int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-            Console.WriteLine($"[WinAPI] Screen dimensions: {screenWidth}x{screenHeight}");
 
             if (screenWidth <= 0 || screenHeight <= 0)
             {
-                Console.WriteLine("[WinAPI] Invalid screen dimensions");
+                _logger?.LogError("Invalid screen dimensions: {Width}x{Height}", screenWidth, screenHeight);
                 return null;
             }
 
-            // Create a device context we can copy to
-            hdcDest = CreateCompatibleDC(hdcSrc);
-            if (hdcDest == IntPtr.Zero)
+            // Get device context for the desktop
+            IntPtr desktopDC = GetDC(IntPtr.Zero);
+            if (desktopDC == IntPtr.Zero)
             {
-                Console.WriteLine("[WinAPI] Failed to create compatible device context");
+                _logger?.LogError("Failed to get desktop device context");
                 return null;
             }
 
-            // Create a bitmap we can copy it to, using GetDeviceCaps to get the width/height
-            hBitmap = CreateCompatibleBitmap(hdcSrc, screenWidth, screenHeight);
-            if (hBitmap == IntPtr.Zero)
+            try
             {
-                Console.WriteLine("[WinAPI] Failed to create compatible bitmap");
-                return null;
-            }
-
-            // Select the bitmap object into the device context
-            IntPtr hOld = SelectObject(hdcDest, hBitmap);
-            if (hOld == IntPtr.Zero)
-            {
-                Console.WriteLine("[WinAPI] Failed to select bitmap into device context");
-                return null;
-            }
-
-            // BitBlt screen to bitmap
-            bool bitBltResult = BitBlt(hdcDest, 0, 0, screenWidth, screenHeight, hdcSrc, 0, 0, SRCCOPY);
-            if (!bitBltResult)
-            {
-                Console.WriteLine("[WinAPI] BitBlt operation failed");
-                return null;
-            }
-
-            Console.WriteLine("[WinAPI] BitBlt completed successfully, converting to managed bitmap...");
-
-            // Get a .NET Bitmap object from the unmanaged HBITMAP
-            using (Bitmap bitmap = Image.FromHbitmap(hBitmap))
-            {
-                // Convert to PNG byte array
-                using (MemoryStream ms = new MemoryStream())
+                // Create a compatible device context and bitmap
+                IntPtr memoryDC = CreateCompatibleDC(desktopDC);
+                if (memoryDC == IntPtr.Zero)
                 {
-                    bitmap.Save(ms, ImageFormat.Png);
-                    byte[] result = ms.ToArray();
-                    Console.WriteLine($"[WinAPI] Screenshot completed successfully, size: {result.Length} bytes");
-                    return result;
+                    _logger?.LogError("Failed to create compatible device context");
+                    return null;
                 }
+
+                try
+                {
+                    IntPtr bitmap = CreateCompatibleBitmap(desktopDC, screenWidth, screenHeight);
+                    if (bitmap == IntPtr.Zero)
+                    {
+                        _logger?.LogError("Failed to create compatible bitmap");
+                        return null;
+                    }
+
+                    try
+                    {
+                        // Select the bitmap into the memory device context
+                        IntPtr oldBitmap = SelectObject(memoryDC, bitmap);
+
+                        // Copy the desktop to the bitmap
+                        bool success = BitBlt(memoryDC, 0, 0, screenWidth, screenHeight, 
+                                            desktopDC, 0, 0, SRCCOPY);
+
+                        if (!success)
+                        {
+                            _logger?.LogError("BitBlt operation failed");
+                            return null;
+                        }
+
+                        // Convert to .NET Bitmap and save as PNG
+                        var image = Image.FromHbitmap(bitmap);
+                        using (image)
+                        {
+                            using var memoryStream = new MemoryStream();
+                            image.Save(memoryStream, ImageFormat.Png);
+                            _logger?.LogDebug("Successfully captured screenshot using WinAPI BitBlt: {Size} bytes", 
+                                            memoryStream.Length);
+                            return memoryStream.ToArray();
+                        }
+                    }
+                    finally
+                    {
+                        DeleteObject(bitmap);
+                    }
+                }
+                finally
+                {
+                    DeleteDC(memoryDC);
+                }
+            }
+            finally
+            {
+                ReleaseDC(IntPtr.Zero, desktopDC);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[WinAPI] Screenshot failed: {ex.Message}");
-            Console.WriteLine($"[WinAPI] Exception type: {ex.GetType().Name}");
+            _logger?.LogError(ex, "Failed to capture screenshot using WinAPI");
             return null;
-        }
-        finally
-        {
-            // Clean up
-            if (hBitmap != IntPtr.Zero)
-                DeleteObject(hBitmap);
-            if (hdcDest != IntPtr.Zero)
-                DeleteDC(hdcDest);
-            if (hdcSrc != IntPtr.Zero)
-                ReleaseDC(IntPtr.Zero, hdcSrc);
         }
     }
 
-    // P/Invoke declarations
-    [DllImport("gdi32.dll")]
-    private static extern bool BitBlt(IntPtr hObject, int nXDest, int nYDest, int nWidth, int nHeight, IntPtr hObjectSource, int nXSrc, int nYSrc, int dwRop);
+    // WinAPI constants
+    private const int SM_CXSCREEN = 0;
+    private const int SM_CYSCREEN = 1;
+    private const uint SRCCOPY = 0x00CC0020;
 
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr CreateCompatibleBitmap(IntPtr hDC, int nWidth, int nHeight);
-
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr CreateCompatibleDC(IntPtr hDC);
-
-    [DllImport("gdi32.dll")]
-    private static extern bool DeleteDC(IntPtr hDC);
-
-    [DllImport("gdi32.dll")]
-    private static extern bool DeleteObject(IntPtr hObject);
-
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr SelectObject(IntPtr hDC, IntPtr hObject);
+    // WinAPI function imports
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetDesktopWindow();
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr hWnd);
@@ -173,20 +158,22 @@ public class WinApiScreenshotProvider : IScreenshotProvider
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
 
-    [DllImport("kernel32.dll")]
-    private static extern uint GetCurrentProcessId();
-    
-    [DllImport("kernel32.dll")]
-    private static extern bool ProcessIdToSessionId(uint processId, out uint sessionId);
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleDC(IntPtr hDC);
 
-    private const int SRCCOPY = 0x00CC0020; // BitBlt dwRop parameter
-    private const int SM_CXSCREEN = 0; // System metric for screen width
-    private const int SM_CYSCREEN = 1; // System metric for screen height
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleBitmap(IntPtr hDC, int nWidth, int nHeight);
 
-    private static uint GetCurrentSessionId()
-    {
-        uint processId = GetCurrentProcessId();
-        ProcessIdToSessionId(processId, out uint sessionId);
-        return sessionId;
-    }
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr hDC, IntPtr hGdiObj);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool BitBlt(IntPtr hDestDC, int x, int y, int nWidth, int nHeight, 
+                                     IntPtr hSrcDC, int xSrc, int ySrc, uint dwRop);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteDC(IntPtr hDC);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr hObject);
 }

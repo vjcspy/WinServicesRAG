@@ -1,107 +1,85 @@
 using Microsoft.Extensions.Logging;
-using WinServicesRAG.Core.Screenshot;
 
 namespace WinServicesRAG.Core.Screenshot;
 
 /// <summary>
-///     Screenshot manager that handles multiple providers with fallback logic.
+///     Manages screenshot providers with fallback strategy.
+///     Tries providers in order of preference until one succeeds.
 /// </summary>
 public class ScreenshotManager : IDisposable
 {
     private readonly List<IScreenshotProvider> _providers;
-    private readonly ILogger<ScreenshotManager>? _logger;
+    private readonly ILogger? _logger;
     private bool _isDisposed;
 
-    public ScreenshotManager(ILogger<ScreenshotManager>? logger = null)
+    public ScreenshotManager(ILogger? logger = null)
     {
         _logger = logger;
-        _providers = new List<IScreenshotProvider>
-        {
-            new WindowsGraphicsCaptureProvider(), // Newest and most compatible
-            new DirectXScreenshotProvider(),      // Hardware accelerated, fast
-            new WinApiScreenshotProvider()        // Reliable fallback
-        };
-    }
-
-    public void Dispose()
-    {
-        if (_isDisposed) return;
-
-        foreach (IScreenshotProvider provider in _providers)
-        {
-            provider.Dispose();
-        }
-
-        _providers.Clear();
-        _isDisposed = true;
-        GC.SuppressFinalize(this);
+        _providers = new List<IScreenshotProvider>();
+        InitializeProviders();
     }
 
     /// <summary>
-    ///     Takes a screenshot using the first available provider.
+    /// Available screenshot providers in order of preference
+    /// </summary>
+    public IReadOnlyList<IScreenshotProvider> Providers => _providers.AsReadOnly();
+
+    /// <summary>
+    /// Takes a screenshot using the first available provider
     /// </summary>
     /// <returns>PNG image data as byte array, or null if all providers fail</returns>
     public byte[]? TakeScreenshot()
     {
         if (_isDisposed)
         {
-            throw new ObjectDisposedException(nameof(ScreenshotManager));
+            _logger?.LogError("ScreenshotManager has been disposed");
+            return null;
         }
 
-        _logger?.LogInformation("[ScreenshotManager] Starting screenshot capture...");
-        Console.WriteLine("[ScreenshotManager] Starting screenshot capture...");
+        _logger?.LogDebug("Attempting to take screenshot using {ProviderCount} providers", _providers.Count);
 
-        foreach (IScreenshotProvider provider in _providers)
+        foreach (var provider in _providers)
         {
             try
             {
-                _logger?.LogDebug("[ScreenshotManager] Checking provider: {ProviderName}", provider.ProviderName);
-                Console.WriteLine($"[ScreenshotManager] Checking provider: {provider.ProviderName}");
+                _logger?.LogDebug("Trying provider: {ProviderName}", provider.ProviderName);
 
                 if (!provider.IsAvailable())
                 {
-                    _logger?.LogDebug("[ScreenshotManager] Provider {ProviderName} is not available, trying next...", provider.ProviderName);
-                    Console.WriteLine($"[ScreenshotManager] Provider {provider.ProviderName} is not available, trying next...");
+                    _logger?.LogDebug("Provider {ProviderName} is not available", provider.ProviderName);
                     continue;
                 }
 
-                _logger?.LogInformation("[ScreenshotManager] Using provider: {ProviderName}", provider.ProviderName);
-                Console.WriteLine($"[ScreenshotManager] Using provider: {provider.ProviderName}");
-                byte[]? screenshot = provider.TakeScreenshot();
-
+                var screenshot = provider.TakeScreenshot();
                 if (screenshot != null && screenshot.Length > 0)
                 {
-                    _logger?.LogInformation("[ScreenshotManager] Screenshot successful with {ProviderName}: {Size} bytes", provider.ProviderName, screenshot.Length);
-                    Console.WriteLine($"[ScreenshotManager] Screenshot successful with {provider.ProviderName}: {screenshot.Length} bytes");
+                    _logger?.LogInformation("Successfully captured screenshot using {ProviderName}: {Size} bytes", 
+                                          provider.ProviderName, screenshot.Length);
                     return screenshot;
                 }
 
-                _logger?.LogDebug("[ScreenshotManager] Provider {ProviderName} returned empty result, trying next...", provider.ProviderName);
-                Console.WriteLine($"[ScreenshotManager] Provider {provider.ProviderName} returned empty result, trying next...");
+                _logger?.LogWarning("Provider {ProviderName} returned null or empty screenshot", provider.ProviderName);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "[ScreenshotManager] Provider {ProviderName} failed", provider.ProviderName);
-                Console.WriteLine($"[ScreenshotManager] Provider {provider.ProviderName} failed: {ex.Message}");
-                Console.WriteLine($"[ScreenshotManager] Exception type: {ex.GetType().Name}");
+                _logger?.LogError(ex, "Provider {ProviderName} failed with exception", provider.ProviderName);
                 // Continue to next provider
             }
         }
 
-        _logger?.LogError("[ScreenshotManager] All providers failed to capture screenshot");
-        Console.WriteLine("[ScreenshotManager] All providers failed to capture screenshot");
+        _logger?.LogError("All screenshot providers failed");
         return null;
     }
 
     /// <summary>
-    ///     Gets the status of all providers.
+    /// Gets information about all providers and their availability
     /// </summary>
-    /// <returns>Dictionary with provider names and their availability status</returns>
+    /// <returns>Dictionary of provider names and their availability status</returns>
     public Dictionary<string, bool> GetProviderStatus()
     {
         var status = new Dictionary<string, bool>();
-
-        foreach (IScreenshotProvider provider in _providers)
+        
+        foreach (var provider in _providers)
         {
             try
             {
@@ -109,8 +87,7 @@ public class ScreenshotManager : IDisposable
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "[ScreenshotManager] Error checking {ProviderName} status", provider.ProviderName);
-                Console.WriteLine($"[ScreenshotManager] Error checking {provider.ProviderName} status: {ex.Message}");
+                _logger?.LogError(ex, "Failed to check availability for provider {ProviderName}", provider.ProviderName);
                 status[provider.ProviderName] = false;
             }
         }
@@ -119,161 +96,73 @@ public class ScreenshotManager : IDisposable
     }
 
     /// <summary>
-    ///     Forces a specific provider to be used.
+    /// Force a specific provider to be used
     /// </summary>
     /// <param name="providerName">Name of the provider to use</param>
-    /// <returns>Screenshot data or null if provider fails</returns>
+    /// <returns>Screenshot data or null if provider not found or fails</returns>
     public byte[]? TakeScreenshotWithProvider(string providerName)
     {
-        if (_isDisposed)
-        {
-            throw new ObjectDisposedException(nameof(ScreenshotManager));
-        }
-
-        IScreenshotProvider? targetProvider = _providers.FirstOrDefault(p => 
+        var provider = _providers.FirstOrDefault(p => 
             string.Equals(p.ProviderName, providerName, StringComparison.OrdinalIgnoreCase));
 
-        if (targetProvider == null)
+        if (provider == null)
         {
-            _logger?.LogError("[ScreenshotManager] Provider '{ProviderName}' not found", providerName);
-            Console.WriteLine($"[ScreenshotManager] Provider '{providerName}' not found");
+            _logger?.LogError("Provider {ProviderName} not found", providerName);
             return null;
         }
+
+        _logger?.LogInformation("Using specific provider: {ProviderName}", providerName);
 
         try
         {
-            _logger?.LogInformation("[ScreenshotManager] Forcing use of provider: {ProviderName}", targetProvider.ProviderName);
-            Console.WriteLine($"[ScreenshotManager] Forcing use of provider: {targetProvider.ProviderName}");
-            
-            if (!targetProvider.IsAvailable())
+            if (!provider.IsAvailable())
             {
-                _logger?.LogWarning("[ScreenshotManager] Provider {ProviderName} is not available", targetProvider.ProviderName);
-                Console.WriteLine($"[ScreenshotManager] Provider {targetProvider.ProviderName} is not available");
+                _logger?.LogError("Provider {ProviderName} is not available", providerName);
                 return null;
             }
 
-            return targetProvider.TakeScreenshot();
+            return provider.TakeScreenshot();
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "[ScreenshotManager] Forced provider {ProviderName} failed", targetProvider.ProviderName);
-            Console.WriteLine($"[ScreenshotManager] Forced provider {targetProvider.ProviderName} failed: {ex.Message}");
+            _logger?.LogError(ex, "Provider {ProviderName} failed", providerName);
             return null;
         }
     }
 
-    /// <summary>
-    ///     Information about a screenshot provider
-    /// </summary>
-    public class ProviderInfo
+    public void Dispose()
     {
-        public string Name { get; set; } = string.Empty;
-        public bool IsAvailable { get; set; }
-        public string? ErrorMessage { get; set; }
-    }
+        if (_isDisposed) return;
 
-    /// <summary>
-    ///     Detailed test results for a screenshot provider
-    /// </summary>
-    public class ProviderTestResult
-    {
-        public string ProviderName { get; set; } = string.Empty;
-        public bool IsAvailable { get; set; }
-        public bool CanCapture { get; set; }
-        public long CaptureTimeMs { get; set; }
-        public string? ErrorMessage { get; set; }
-        public int ImageSizeBytes { get; set; }
-
-        public override string ToString()
+        foreach (var provider in _providers)
         {
-            return $"{ProviderName}: Available={IsAvailable}, CanCapture={CanCapture}, " +
-                $"Time={CaptureTimeMs}ms, Size={ImageSizeBytes} bytes" +
-                (ErrorMessage != null ? $", Error: {ErrorMessage}" : "");
-        }
-    }
-
-    /// <summary>
-    ///     Gets information about available providers on the current system
-    /// </summary>
-    /// <returns>List of provider information</returns>
-    public List<ProviderInfo> GetProviderStatus2()
-    {
-        var result = new List<ProviderInfo>();
-
-        foreach (IScreenshotProvider provider in _providers)
-        {
-            ProviderInfo info = new ProviderInfo
-            {
-                Name = provider.ProviderName,
-                IsAvailable = false,
-                ErrorMessage = null
-            };
-
             try
             {
-                info.IsAvailable = provider.IsAvailable();
+                provider.Dispose();
             }
             catch (Exception ex)
             {
-                info.ErrorMessage = ex.Message;
+                _logger?.LogError(ex, "Error disposing provider {ProviderName}", provider.ProviderName);
             }
-
-            result.Add(info);
         }
 
-        return result;
+        _providers.Clear();
+        _isDisposed = true;
+        GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    ///     Tests all providers and returns detailed results
-    ///     Useful for diagnostics and system capability assessment
-    /// </summary>
-    /// <returns>Test results for each provider</returns>
-    public List<ProviderTestResult> TestAllProviders()
+    private void InitializeProviders()
     {
-        var results = new List<ProviderTestResult>();
+        // Add providers in order of preference
+        // 1. DirectX Desktop Duplication API - Best performance and compatibility for Windows 11
+        _providers.Add(new DirectXScreenshotProvider(_logger));
 
-        foreach (IScreenshotProvider provider in _providers)
-        {
-            ProviderTestResult testResult = new ProviderTestResult
-            {
-                ProviderName = provider.ProviderName,
-                IsAvailable = false,
-                CanCapture = false,
-                CaptureTimeMs = 0,
-                ErrorMessage = null,
-                ImageSizeBytes = 0
-            };
+        // 2. Windows Graphics Capture API - Modern but currently disabled due to .NET compatibility
+        _providers.Add(new WindowsGraphicsCaptureProvider(_logger));
 
-            try
-            {
-                // Test availability
-                testResult.IsAvailable = provider.IsAvailable();
+        // 3. WinAPI (BitBlt) - Fallback, works everywhere but limited capability
+        _providers.Add(new WinApiScreenshotProvider(_logger));
 
-                if (testResult.IsAvailable)
-                {
-                    // Test actual capture
-                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                    byte[]? screenshot = provider.TakeScreenshot();
-                    stopwatch.Stop();
-
-                    testResult.CaptureTimeMs = stopwatch.ElapsedMilliseconds;
-
-                    if (screenshot != null && screenshot.Length > 0)
-                    {
-                        testResult.CanCapture = true;
-                        testResult.ImageSizeBytes = screenshot.Length;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                testResult.ErrorMessage = ex.Message;
-            }
-
-            results.Add(testResult);
-        }
-
-        return results;
+        _logger?.LogInformation("Initialized {ProviderCount} screenshot providers", _providers.Count);
     }
 }

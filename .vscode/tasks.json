@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build All Projects",
+			"type": "shell",
+			"command": "dotnet build",
+			"group": "build",
+			"isBackground": false,
+			"args": [
+				"--configuration",
+				"Release"
+			],
+			"problemMatcher": [
+				"$msCompile"
+			]
+		}
+	]
+}

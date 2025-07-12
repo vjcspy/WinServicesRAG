@@ -16,57 +16,77 @@ This project aims to build an extremely stable and tamper-resistant Windows moni
 1. **WorkerService** - Windows Service responsible for API communication and job orchestration
 2. **WatchdogService** - Windows Service that ensures WorkerService is always running  
 3. **ScreenshotCapture** - Console Application that handles screenshot capture in user session
+4. **WinServicesRAG.Core** - Shared library for other servces like `WorkerService`, `ScreenshotCapture` can refer
 
 ### Architecture Overview
 
 ```
-┌─────────────────┐              ┌──────────────────┐              ┌─────────────────┐
-│  API Server     │              │  WorkerService   │              │ ScreenshotCapture│
-│                 │              │  (Session 0)     │              │  (User Session) │
-│                 │◄────────────►│                  │              │                 │
-│ - Get Jobs      │  HTTP API    │ - API Client     │              │ - DirectX API   │
-│ - Upload Images │              │ - Job Processing │              │ - Win Graphics  │
-│ - Update Status │              │ - File System    │              │ - WinAPI GDI    │
-│ - Job Queue     │              │ - Data Storage   │              │ - CLI Interface │
-└─────────────────┘              └──────────────────┘              └─────────────────┘
-                                          ▲                                  ▲
-                                          │                                  │
-                                          │ Monitor & Restart                │ Monitor & Restart
-                                          │                                  │
-                                 ┌────────────────────────────────────────────┐
-                                 │           WatchdogService                  │
-                                 │           (Session 0)                      │
-                                 │                                            │
-                                 │ ┌─────────────────┐ ┌─────────────────────┐│
-                                 │ │ Worker Monitor  │ │Screenshot Monitor   ││
-                                 │ │                 │ │                     ││
-                                 │ │ - Health Check  │ │ - Process Health    ││
-                                 │ │ - Auto Restart  │ │ - Session Detection ││
-                                 │ │ - Log Monitor   │ │ - Auto Launch       ││
-                                 │ └─────────────────┘ └─────────────────────┘│
-                                 └────────────────────────────────────────────┘
+                                 ┌─────────────────┐
+                                 │   API Server    │
+                                 │                 │
+                                 │ - Get Jobs      │
+                                 │ - Upload Images │
+                                 │ - Update Status │
+                                 │ - Job Queue     │
+                                 └─────────────────┘
+                                          ▲
+                                          │ HTTP API
+                              ┌───────────┼───────────┐
+                              │           │           │
+                              ▼           ▼           ▼
+                ┌──────────────────┐              ┌─────────────────┐
+                │  WorkerService   │              │ ScreenshotCapture│
+                │  (Session 0)     │              │  (User Session) │
+                │                  │              │                 │
+                │ - API Client     │              │ - API Client    │
+                │ - Job Processing │              │ - Screenshot    │
+                │ - Business Logic │              │ - DirectX API   │
+                │ - Data Storage   │              │ - WinAPI GDI    │
+                │ - Service Host   │              │ - CLI Interface │
+                └──────────────────┘              └─────────────────┘
+                          ▲                                  ▲
+                          │                                  │
+                          │ Monitor & Restart                │ Monitor & Restart
+                          │                                  │
+                 ┌────────────────────────────────────────────┐
+                 │           WatchdogService                  │
+                 │           (Session 0)                      │
+                 │                                            │
+                 │ ┌─────────────────┐ ┌─────────────────────┐│
+                 │ │ Worker Monitor  │ │Screenshot Monitor   ││
+                 │ │                 │ │                     ││
+                 │ │ - Health Check  │ │ - Process Health    ││
+                 │ │ - Auto Restart  │ │ - Session Detection ││
+                 │ │ - Log Monitor   │ │ - Auto Launch       ││
+                 │ └─────────────────┘ └─────────────────────┘│
+                 └────────────────────────────────────────────┘
 ```
 
 **Key Design Decisions:**
 
-### Why Two Separate Services for Screenshot Capture?
+### Why Independent Dual API Architecture?
 
-**Critical Technical Constraint - Session Isolation:**
+**Technical Requirement - Complete Service Isolation:**
 
-- **WorkerService (Session 0)**: Runs as Windows Service in isolated Session 0 where **DirectX APIs and Windows Graphics Capture APIs are NOT accessible**
-- **ScreenshotCapture (User Session)**: Must run in User Session (Session 1+) to access:
-  - **DirectX Desktop Duplication API** - Requires desktop access and graphics context
-  - **Windows Graphics Capture API** - Requires user session and UWP runtime
-  - **Win32 GDI APIs** - Requires desktop window access
+- **WorkerService (Session 0)**: Handles business logic, data processing, and general API operations but **cannot access desktop graphics**
+- **ScreenshotCapture (User Session)**: Specialized for desktop capture using DirectX/Graphics APIs but runs in user context
+- **Both services are completely independent**: Each has its own API client, job polling, error handling, and communication with API Server
+- **No shared state or communication**: Services operate in parallel without any dependency on each other
 
-**This is NOT code duplication but a technical necessity imposed by Windows security architecture.**
+**This architecture provides:**
+- **Maximum Reliability**: One service failure doesn't affect the other
+- **Session Compatibility**: Each service runs in its optimal environment 
+- **Scalability**: Services can be scaled independently
+- **Simplified Development**: No complex inter-process communication needed
 
 ### Architecture Principles:
-- **Session Separation**: Services run in Session 0 (system), ScreenshotCapture runs in User Session for desktop access
-- **Independent Operation**: WorkerService and ScreenshotCapture work directly and parallel with API Server
-- **WatchdogService Management**: WatchdogService manages both WorkerService and ScreenshotCapture processes
-- **No Direct Communication**: WorkerService and ScreenshotCapture do not communicate with each other
+- **Independent & Simultaneous Operation**: Both WorkerService and ScreenshotCapture work directly with API Server in parallel
+- **Session Separation**: WorkerService runs in Session 0 (system), ScreenshotCapture runs in User Session for desktop access
+- **No Inter-Service Communication**: WorkerService and ScreenshotCapture do NOT communicate with each other directly
+- **Dual API Clients**: Each service has its own HTTP client for independent API communication
+- **WatchdogService Management**: WatchdogService monitors and manages both independent processes
 - **Isolated Responsibilities**: Each component has distinct, non-overlapping responsibilities
+- **High Availability**: Independent operation ensures one service failure doesn't affect the other
 
 ### ScreenshotCapture Protection Strategy:
 Since ScreenshotCapture cannot run as Windows Service (due to session constraints), it requires special protection:
@@ -75,9 +95,9 @@ Since ScreenshotCapture cannot run as Windows Service (due to session constraint
 - **Stealth Operation**: Hidden UI, minimal resource footprint, resistant to casual termination
 - **Session Detection**: Automatically detect user logon/logoff and adapt accordingly
 
-### Technology Stack (Recommended)
+### Technology Stack (Updated for Windows 11)
 
-* **Language:** C\# (.NET 8+)
+* **Language:** C# (.NET 9)
 * **Framework:** ASP.NET Core Worker Service
 * **Libraries:**
    * **TopShelf:** For easily creating and managing Windows Services.
@@ -85,8 +105,8 @@ Since ScreenshotCapture cannot run as Windows Service (due to session constraint
    * **HttpClientFactory:** For efficient management of HTTP connections.
    * **Serilog/NLog:** For detailed logging.
    * **P/Invoke (DllImport):** For interacting with Windows APIs.
-   * **SharpDX:** For using the DirectX Desktop Duplication API.
-   * **Windows SDK Contracts:** For using the Windows Graphics Capture API.
+   * **Vortice.Windows:** Modern DirectX wrapper for .NET (replaces obsolete SharpDX).
+   * **Microsoft.Extensions.Logging:** For comprehensive logging throughout all services.
 
 -----
 
@@ -137,31 +157,43 @@ This is the main service that implements the business logic.
       4.  **`Catch` Operator:** Use `Catch` to handle errors from the child processing stream. When an error occurs, it will switch to another stream to call the API to update the status to `ERROR` along with the `error_message`.
       5.  **`Finally` Operator:** Regardless of success or failure, ensure resource cleanup (e.g., temporary files, process handles).
 
-- [ ] **Step 3: Develop the Screenshot Module (Critical Task):**
+- [ ] **Step 3: Develop the Screenshot Module (Critical Task):** ✅ **COMPLETED**
 
-   **Architecture Change:** Due to Session 0 isolation limitations with Windows Services, the screenshot functionality operates as an independent parallel service.
+   **Architecture Implementation:** Successfully implemented as an independent parallel service with modern technology stack.
 
-   - [ ] Create a separate `ScreenshotCapture` console application project.
-   - [ ] This console app will run continuously and monitor for screenshot requests.
-   - [ ] Communication with WorkerService via shared filesystem or database.
-   - [ ] The ScreenshotCapture will:
-      - **Independent Operation:** Poll for screenshot jobs directly from filesystem/database
-      - **Direct API Communication:** Upload screenshots directly to API Server
-      - **Status Updates:** Update job status directly via API
-      - **Process Monitoring:** Be monitored and managed by WatchdogService
+   - [x] Created a separate `ScreenshotCapture` console application project.
+   - [x] Implemented continuous monitoring and job processing capabilities.
+   - [x] Independent operation parallel with WorkerService - no direct communication required.
+   - [x] **Enhanced Screenshot Implementation:**
+      - [x] **DirectX Desktop Duplication API (Vortice.Windows)** - Primary provider, optimized for Windows 11
+      - [x] **WinAPI (BitBlt + PrintWindow)** - Reliable fallback, works on all Windows versions  
+      - [x] **Windows Graphics Capture API Placeholder** - Future implementation when .NET compatibility improves
+      - [x] **Fallback Strategy:** Automatic provider selection with graceful degradation
    
-   - [ ] In the console application, create an `IScreenshotProvider` interface with a `byte[] TakeScreenshot()` method.
-   - [ ] Implement 3 different solutions for this interface. The processing flow will try Solution 1; if it fails (returns null or throws an exception), it will try Solution 2, and finally Solution 3.
+   - [x] **Advanced Features Implemented:**
+      - [x] CLI mode for testing and debugging (`dotnet run -- cli --help`)
+      - [x] Provider status checking (`dotnet run -- cli --status`)
+      - [x] Manual provider selection (`dotnet run -- cli --provider "WinAPI"`)
+      - [x] Verbose logging support for troubleshooting
+      - [x] Comprehensive error handling and retry mechanisms
+      - [x] Modern .NET 9 compatibility with Vortice.Windows DirectX wrapper
+   
+   - [x] **Test Results (Windows 11):**
+      - [x] ✅ DirectX Desktop Duplication API: Available in user session, high performance
+      - [x] ✅ WinAPI (BitBlt): Available and working, produced 219KB screenshot
+      - [x] ⚠️ Windows Graphics Capture API: Disabled due to .NET Runtime compatibility issues
+      - [x] ✅ Automatic provider fallback working correctly
+      - [x] ✅ CLI testing interface functional and user-friendly
 
-  ### Secure Window Screenshot Solutions (Console Application)
+  ### Secure Window Screenshot Solutions (Updated for Windows 11)
 
-  | Criteria | Solution 1: Windows Graphics Capture API | Solution 2: DirectX Desktop Duplication API | Solution 3: WinAPI (BitBlt + PrintWindow) |
+  | Criteria | Solution 1: DirectX Desktop Duplication API (Vortice) | Solution 2: Windows Graphics Capture API | Solution 3: WinAPI (BitBlt + PrintWindow) |
       | :--- | :--- | :--- | :--- |
-  | **Description** | A modern Windows 10+ API that allows for safe and efficient recording of a window's or the entire screen's content. | A low-level DirectX API that creates a copy of the desktop on the GPU, allowing direct access to the image buffer. | Uses traditional GDI/User32 functions. `BitBlt` for the entire screen and `PrintWindow` for specific windows. |
-  | **Pros** | - **Official & Secure:** Recommended by Microsoft.\<br\>- **Efficient:** Hardware-optimized.\<br\>- **Captures most content:** Including UAC, UWP apps, protected content (except DRM). | - **Extremely High Performance:** Operates at the GPU level.\<br\>- **Captures everything:** Including full-screen games, overlays.\<br\>- **Bypasses user-mode protection layers.** | - **Wide Compatibility:** Works on all Windows versions.\<br\>- **Simpler:** Easier to implement than DirectX.\<br\>- `PrintWindow` can sometimes capture windows that `BitBlt` cannot. |
-  | **Cons** | - **Requires Windows 10 (1803+)**.\<br\>- Needs to handle a `DispatcherQueue` if the service lacks a UI thread. | - **Complex:** Requires knowledge of DirectX.\<br\>- **Lots of boilerplate code.**\<br\>- May not work without a GPU or with incompatible drivers. | - **Unreliable:** Fails with UAC, DirectX/OpenGL full-screen, transparent windows, protected content.\<br\>- **`PrintWindow` does not always work.** |
-  | **Test Checklist** | - [ ] Capture UAC prompt window.\<br\>- [ ] Capture a UWP app window (like Calculator).\<br\>- [ ] Capture a browser window playing a non-DRM video.\<br\>- [ ] Run on a multi-monitor setup. | - [ ] Capture the screen while a full-screen game is running.\<br\>- [ ] Capture the screen with the mouse cursor.\<br\>- [ ] Check performance (CPU/GPU usage).\<br\>- [ ] Test on different graphics cards (NVIDIA, AMD, Intel). | - [ ] Capture the desktop.\<br\>- [ ] Capture a Notepad window.\<br\>- [ ] Attempt to capture Task Manager (may fail).\<br\>- [ ] Attempt to capture a window with hardware acceleration enabled in Chrome. |
-  | **Risks & Prereqs** | **Prerequisites:** Windows 10 build 17134 or newer. Requires a reference to `Windows.SDK.Contracts`.\<br\>**Risk:** Proper initialization and authorization must be handled correctly, even when running as System. | **Prerequisites:** DirectX 11.1+. Requires a library like `SharpDX`.\<br\>**Risk:** Driver errors can cause crashes. Complex GPU resource management. | **Prerequisites:** Any version of Windows.\<br\>**Risk:** Silent failures (returns a black/empty image). GDI handle leaks if not managed carefully. |
+  | **Description** | Modern DirectX Desktop Duplication API using Vortice.Windows wrapper. High performance, operates at GPU level. | A modern Windows 10+ API that allows for safe and efficient recording of a window's or the entire screen's content. | Uses traditional GDI/User32 functions. `BitBlt` for the entire screen and `PrintWindow` for specific windows. |
+  | **Pros** | - **Extremely High Performance:** GPU-level operations.\<br\>- **Captures everything:** Including full-screen games, overlays.\<br\>- **Modern Wrapper:** Vortice.Windows is actively maintained.\<br\>- **Optimized for Windows 11** | - **Official & Secure:** Recommended by Microsoft.\<br\>- **Efficient:** Hardware-optimized.\<br\>- **Captures most content:** Including UAC, UWP apps, protected content (except DRM). | - **Wide Compatibility:** Works on all Windows versions.\<br\>- **Simpler:** Easier to implement than DirectX.\<br\>- `PrintWindow` can sometimes capture windows that `BitBlt` cannot. |
+  | **Cons** | - **Session Requirements:** Requires user session, not available in Session 0.\<br\>- **Driver Dependencies:** May not work without proper GPU drivers. | - **Requires Windows 10 (1803+)**.\<br\>- **Currently Disabled:** .NET compatibility issues with Windows Runtime.\<br\>- **Complex Setup:** Requires proper UWP context initialization. | - **Unreliable:** Fails with UAC, DirectX/OpenGL full-screen, transparent windows, protected content.\<br\>- **`PrintWindow` does not always work.** |
+  | **Implementation Status** | ✅ **IMPLEMENTED** - Working with Vortice.Windows | ⚠️ **DISABLED** - Pending .NET compatibility fixes | ✅ **IMPLEMENTED** - Working fallback |
+  | **Test Results** | ✅ Successfully captures desktop in user session | ❌ Not available due to .NET Runtime limitations | ✅ Captures desktop successfully, 219KB output |
 
 - [ ] **Step 4: Finalize API Client and Upload Flow:**
 
@@ -232,12 +264,13 @@ This service manages both WorkerService and ScreenshotCapture processes, ensurin
 ## Phase 4: Integration, Testing & Deployment
 
 - [ ] **Integration Testing:**
-   - [ ] **Independent Operation Testing:** Test that WorkerService and ScreenshotCapture operate independently and parallel with API Server.
-   - [ ] **Job Flow Testing:** API server returns a job → WorkerService processes job → ScreenshotCapture independently handles screenshots → Both services update API directly.
-   - [ ] **WatchdogService Testing:** Test dual-process monitoring - kill one service and verify Watchdog restarts it correctly.
-   - [ ] **Session Isolation Testing:** Verify that ScreenshotCapture works correctly in user session while WorkerService operates in Session 0.
-   - [ ] **Communication Testing:** Test shared filesystem/database communication between services.
-   - [ ] **Failover Testing:** Test various failure scenarios and recovery mechanisms.
+   - [ ] **Independent Dual API Testing:** Test that both WorkerService and ScreenshotCapture operate independently with their own API connections
+   - [ ] **Simultaneous Operation Testing:** Both services polling API Server simultaneously without conflicts
+   - [ ] **Job Isolation Testing:** Verify WorkerService processes business jobs while ScreenshotCapture handles screenshot requests independently
+   - [ ] **API Load Testing:** Test API Server handling multiple simultaneous connections from both services
+   - [ ] **WatchdogService Testing:** Test dual-process monitoring - kill one service and verify Watchdog restarts it without affecting the other
+   - [ ] **Session Isolation Testing:** Verify that ScreenshotCapture works correctly in user session while WorkerService operates in Session 0
+   - [ ] **Independent Failover Testing:** Test various failure scenarios and verify services can recover independently
 - [ ] **Fault Tolerance Testing:**
    - [ ] **Kill Process:** Use Task Manager (with Admin rights) to kill the `WorkerService.exe` process. Measure the time it takes for the Watchdog to restart it. Repeat for `WatchdogService.exe`.
    - [ ] **Kill ScreenshotCapture:** Test behavior when ScreenshotCapture process is terminated during operation.
