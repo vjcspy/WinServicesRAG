@@ -64,6 +64,31 @@ public class ScreenshotManager
         }
     }
 
+    public byte[]? TakeScreenShotByProvider(int providerIndex)
+    {
+        if (providerIndex < 0 || providerIndex >= _providers.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(providerIndex), "Invalid provider index");
+        }
+
+        IScreenshotProvider provider = _providers[providerIndex];
+        try
+        {
+            if (!provider.IsAvailable())
+            {
+                Console.WriteLine($"Provider {provider.ProviderName} is not available");
+                return null;
+            }
+
+            return provider.TakeScreenshot();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Provider {provider.ProviderName} failed with exception: {ex.Message}");
+            return null;
+        }
+    }
+
     /// <summary>
     ///     Gets information about available providers on the current system
     /// </summary>

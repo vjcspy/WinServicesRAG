@@ -37,7 +37,7 @@ public class Worker : BackgroundService
     private async Task RunScreenshotTest()
     {
         _logger.LogInformation("=== Starting Screenshot Provider Test ===");
-        
+
         try
         {
             // Create test output directory
@@ -50,59 +50,35 @@ public class Worker : BackgroundService
             var providerStatus = _screenshotManager.GetProviderStatus();
             foreach (var status in providerStatus)
             {
-                _logger.LogInformation("Provider: {Name}, Available: {Available}, Error: {Error}", 
+                _logger.LogInformation("Provider: {Name}, Available: {Available}, Error: {Error}",
                     status.Name, status.IsAvailable, status.ErrorMessage ?? "None");
             }
 
-            // Test 2: Run detailed tests on all providers
-            _logger.LogInformation("--- Detailed Provider Tests ---");
-            var testResults = _screenshotManager.TestAllProviders();
-            foreach (var result in testResults)
+            for (var i = 0; i < providerStatus.Count; i++)
             {
-                _logger.LogInformation("Test Result: {Result}", result.ToString());
-            }
-
-            // Test 3: Take a screenshot using the manager (fallback logic)
-            _logger.LogInformation("--- Screenshot Capture Test ---");
-            byte[]? screenshot = _screenshotManager.TakeScreenshot();
-            
-            if (screenshot != null && screenshot.Length > 0)
-            {
-                // Save the screenshot to file
-                string fileName = $"test_screenshot_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-                string filePath = Path.Combine(testDir, fileName);
-                
-                await File.WriteAllBytesAsync(filePath, screenshot);
-                _logger.LogInformation("✅ Screenshot captured successfully! Size: {Size} bytes, Saved to: {FilePath}", 
-                    screenshot.Length, filePath);
-            }
-            else
-            {
-                _logger.LogError("❌ Failed to capture screenshot - all providers failed");
-            }
-
-            // Test 4: Performance test
-            _logger.LogInformation("--- Performance Test ---");
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            for (int i = 0; i < 3; i++)
-            {
-                var perfScreenshot = _screenshotManager.TakeScreenshot();
-                if (perfScreenshot != null)
+                var screenshot = _screenshotManager.TakeScreenShotByProvider(i);
+                if (screenshot != null)
                 {
-                    _logger.LogInformation("Performance test {Count}: {Size} bytes", i + 1, perfScreenshot.Length);
+                    string fileName = $"_test_screenshot_{providerStatus[i].Name}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                    string filePath = Path.Combine(testDir, fileName);
+
+                    await File.WriteAllBytesAsync(filePath, screenshot);
+                    _logger.LogInformation("✅ Screenshot captured successfully! Size: {Size} bytes, Saved to: {FilePath}",
+                        screenshot.Length, filePath);
                 }
-                await Task.Delay(100); // Small delay between captures
+                else
+                {
+                    _logger.LogWarning("❌ Screenshot capture failed for provider {ProviderName}", providerStatus[i].Name);
+                }
             }
-            stopwatch.Stop();
-            _logger.LogInformation("3 screenshots took {ElapsedMs}ms total (avg: {AvgMs}ms)", 
-                stopwatch.ElapsedMilliseconds, stopwatch.ElapsedMilliseconds / 3.0);
+
 
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during screenshot testing");
         }
-        
+
         _logger.LogInformation("=== Screenshot Provider Test Completed ===");
     }
 
