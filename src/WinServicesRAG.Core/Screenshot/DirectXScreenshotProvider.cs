@@ -51,27 +51,16 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
     {
         try
         {
-            // // Check current session info
-            // uint sessionId = GetCurrentSessionId();
-            // _logger?.LogDebug(message: "Current session ID: {SessionId}", sessionId);
-            //
-            // // Session 0 is the system session - DirectX Desktop Duplication doesn't work there
-            // if (sessionId == 0)
-            // {
-            //     _logger?.LogWarning(message: "DirectX Desktop Duplication API not available in Session 0 (system session)");
-            //     return false;
-            // }
-
             // Try to initialize DirectX components
             InitializeDirectX();
             bool isAvailable = _outputDuplication != null;
 
-            logger?.LogInformation(message: "DirectX Desktop Duplication API availability: {IsAvailable}", isAvailable);
+            logger.LogInformation(message: "DirectX Desktop Duplication API availability: {IsAvailable}", isAvailable);
             return isAvailable;
         }
         catch (Exception ex)
         {
-            logger?.LogError(exception: ex, message: "Failed to check DirectX availability");
+            logger.LogError(exception: ex, message: "Failed to check DirectX availability");
             return false;
         }
     }
@@ -85,21 +74,21 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
             // Đây là điểm khởi tạo "On-demand"
             if (_outputDuplication == null)
             {
-                logger?.LogWarning(message: "DirectX not initialized, attempting to initialize...");
+                logger.LogWarning(message: "DirectX not initialized, attempting to initialize...");
                 try
                 {
                     InitializeDirectX();
                 }
                 catch (Exception ex)
                 {
-                    logger?.LogError(exception: ex, message: "Failed to initialize DirectX during screenshot attempt.");
+                    logger.LogError(exception: ex, message: "Failed to initialize DirectX during screenshot attempt.");
                     return null;
                 }
             }
 
             if (_device == null || _outputDuplication == null || _deviceContext == null)
             {
-                logger?.LogError(message: "DirectX components not properly initialized after attempt.");
+                logger.LogError(message: "DirectX components not properly initialized after attempt.");
                 return null;
             }
 
@@ -107,43 +96,42 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
             ID3D11Texture2D? desktopImage = null;
             ID3D11Texture2D? stagingTexture = null;
             MappedSubresource mappedResource = default(MappedSubresource);
-            byte[]? imageData = null;
 
             try
             {
-                logger?.LogDebug(message: "Attempting to acquire frame from DirectX Desktop Duplication API.");
+                logger.LogDebug(message: "Attempting to acquire frame from DirectX Desktop Duplication API.");
 
                 // Loop để thử lấy frame, xử lý AccessLost
                 for (int i = 0; i < 2; i++) // Thử lại 1 lần nếu AccessLost
                 {
                     Result result = _outputDuplication.AcquireNextFrame(
                         timeoutInMilliseconds: 500, // Giảm timeout để phản hồi nhanh hơn nếu không có frame
-                        frameInfo: out OutduplFrameInfo frameInfo,
+                        frameInfo: out OutduplFrameInfo _,
                         desktopResource: out desktopResource);
 
                     if (result.Success)
                     {
-                        logger?.LogDebug(message: "Successfully acquired frame.");
+                        logger.LogDebug(message: "Successfully acquired frame.");
                         break; // Thành công, thoát vòng lặp
                     }
                     if (result == ResultCode.AccessLost)
                     {
-                        logger?.LogWarning(message: "Access lost, attempting to reinitialize DirectX.");
+                        logger.LogWarning(message: "Access lost, attempting to reinitialize DirectX.");
                         ReinitializeDirectX();
                         if (_outputDuplication == null) // Reinitialization failed
                         {
-                            logger?.LogError(message: "DirectX reinitialization failed after AccessLost.");
+                            logger.LogError(message: "DirectX reinitialization failed after AccessLost.");
                             return null;
                         }
                     }
                     else if (result == ResultCode.WaitTimeout)
                     {
-                        logger?.LogDebug(message: "No new frame available (timeout).");
+                        logger.LogDebug(message: "No new frame available (timeout).");
                         return null;
                     }
                     else
                     {
-                        logger?.LogError(message: "Failed to acquire frame: {Result}", result);
+                        logger.LogError(message: "Failed to acquire frame: {Result}", result);
                         return null;
                     }
                 }
@@ -151,16 +139,11 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
                 // Nếu desktopResource vẫn null sau vòng lặp, có nghĩa là không lấy được frame
                 if (desktopResource == null)
                 {
-                    logger?.LogError(message: "Desktop resource is null after acquiring frame attempts.");
+                    logger.LogError(message: "Desktop resource is null after acquiring frame attempts.");
                     return null;
                 }
 
                 desktopImage = desktopResource.QueryInterface<ID3D11Texture2D>();
-                if (desktopImage == null)
-                {
-                    logger?.LogError(message: "Failed to query desktop texture interface.");
-                    return null;
-                }
 
                 Texture2DDescription textureDesc = desktopImage.Description;
 
@@ -183,23 +166,23 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
 
                 mappedResource = _deviceContext.Map(resource: stagingTexture, subresource: 0, mode: MapMode.Read, flags: MapFlags.None);
 
-                imageData = ConvertToImage(mappedResource: mappedResource, width: textureDesc.Width, height: textureDesc.Height);
+                byte[] imageData = ConvertToImage(mappedResource: mappedResource, width: textureDesc.Width, height: textureDesc.Height);
                 return imageData;
             }
             catch (SharpGenException sgEx)
             {
-                logger?.LogError(exception: sgEx, message: "SharpGen exception during DirectX screenshot.");
+                logger.LogError(exception: sgEx, message: "SharpGen exception during DirectX screenshot.");
                 // Cân nhắc reinitialize nếu lỗi là do thiết bị bị mất/reset
                 if (sgEx.ResultCode == ResultCode.AccessLost || sgEx.ResultCode == ResultCode.DeviceRemoved || sgEx.ResultCode == ResultCode.DeviceReset)
                 {
-                    logger?.LogWarning(message: "Device lost/reset detected, attempting reinitialization.");
+                    logger.LogWarning(message: "Device lost/reset detected, attempting reinitialization.");
                     ReinitializeDirectX();
                 }
                 return null;
             }
             catch (Exception ex)
             {
-                logger?.LogError(exception: ex, message: "Unexpected error during DirectX screenshot.");
+                logger.LogError(exception: ex, message: "Unexpected error during DirectX screenshot.");
                 return null;
             }
             finally
@@ -254,11 +237,11 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
                 _outputDuplication = dxgiOutput1.DuplicateOutput(device: _device);
             }
 
-            logger?.LogInformation(message: "DirectX Desktop Duplication API initialized successfully");
+            logger.LogInformation(message: "DirectX Desktop Duplication API initialized successfully");
         }
         catch (Exception ex)
         {
-            logger?.LogError(exception: ex, message: "Failed to initialize DirectX");
+            logger.LogError(exception: ex, message: "Failed to initialize DirectX");
             Dispose();
             throw;
         }
@@ -268,7 +251,7 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
     {
         try
         {
-            logger?.LogInformation(message: "Reinitializing DirectX Desktop Duplication API");
+            logger.LogInformation(message: "Reinitializing DirectX Desktop Duplication API");
 
             _outputDuplication?.Dispose();
             _outputDuplication = null;
@@ -320,7 +303,4 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
         bitmap.Save(stream: memoryStream, format: ImageFormat.Png);
         return memoryStream.ToArray();
     }
-
-    [DllImport(dllName: "kernel32.dll")]
-    private static extern uint GetCurrentSessionId();
 }
