@@ -1,4 +1,4 @@
-using WorkerService.Screenshot;
+using WinServicesRAG.Core.Screenshot;
 
 namespace WorkerService;
 
@@ -47,7 +47,7 @@ public class Worker : BackgroundService
 
             // Test 1: Get provider status
             _logger.LogInformation("--- Provider Availability Test ---");
-            var providerStatus = _screenshotManager.GetProviderStatus();
+            var providerStatus = _screenshotManager.GetProviderStatus2();
             foreach (var status in providerStatus)
             {
                 _logger.LogInformation("Provider: {Name}, Available: {Available}, Error: {Error}",
@@ -56,10 +56,10 @@ public class Worker : BackgroundService
 
             for (var i = 0; i < providerStatus.Count; i++)
             {
-                var screenshot = _screenshotManager.TakeScreenShotByProvider(i);
+                var screenshot = _screenshotManager.TakeScreenshotWithProvider(providerStatus[i].Name);
                 if (screenshot != null)
                 {
-                    string fileName = $"_test_screenshot_{providerStatus[i].Name}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                    string fileName = $"_test_screenshot_{providerStatus[i].Name.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
                     string filePath = Path.Combine(testDir, fileName);
 
                     await File.WriteAllBytesAsync(filePath, screenshot);

@@ -1,5 +1,5 @@
 using WorkerService;
-using WorkerService.Screenshot;
+using WinServicesRAG.Core.Screenshot;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddHostedService<Worker>();

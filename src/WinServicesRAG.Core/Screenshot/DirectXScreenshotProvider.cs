@@ -1,14 +1,16 @@
-﻿using SharpDX;
+using SharpDX;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Device = SharpDX.Direct3D11.Device;
 using MapFlags = SharpDX.Direct3D11.MapFlags;
 using Resource = SharpDX.DXGI.Resource;
 using ResultCode = SharpDX.DXGI.ResultCode;
 
-namespace WorkerService.Screenshot;
+namespace WinServicesRAG.Core.Screenshot;
 
 /// <summary>
 ///     DirectX Desktop Duplication API provider.
@@ -17,10 +19,11 @@ namespace WorkerService.Screenshot;
 public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
 {
     private Texture2D? _desktopTexture;
-
     private Device? _device;
     private bool _isDisposed;
     private OutputDuplication? _outputDuplication;
+
+    public string ProviderName => "DirectX Desktop Duplication API";
 
     public void Dispose()
     {
@@ -36,20 +39,25 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         _device = null;
 
         _isDisposed = true;
-        GC.SuppressFinalize(obj: this);
-    }
-    public string ProviderName
-    {
-        get
-        {
-            return "DirectX Desktop Duplication API";
-        }
+        GC.SuppressFinalize(this);
     }
 
     public bool IsAvailable()
     {
         try
         {
+            // Check current session info
+            uint sessionId = GetCurrentSessionId();
+            Console.WriteLine($"[DirectX] Current session ID: {sessionId}");
+            
+            // Session 0 is the system session, user sessions are 1+
+            if (sessionId == 0)
+            {
+                Console.WriteLine("[DirectX] WARNING: Running in Session 0 (System). DirectX Desktop Duplication may not capture user desktop.");
+                Console.WriteLine("[DirectX] This is expected for Windows Services. DirectX will capture Session 0 desktop (usually black).");
+                return false; // Explicitly return false for Session 0
+            }
+            
             Initialize();
             bool isAvailable = _outputDuplication != null;
             Console.WriteLine($"[DirectX] IsAvailable check: {isAvailable}");
@@ -59,11 +67,6 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         {
             Console.WriteLine($"[DirectX] IsAvailable failed: {ex.Message}");
             return false;
-        }
-        finally
-        {
-            // Don't dispose here, keep the connection for subsequent calls
-            // Dispose();
         }
     }
 
@@ -145,14 +148,61 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
 
                         Console.WriteLine($"[DirectX] Creating bitmap: {width}x{height}, stride: {stride}");
 
-                        // Create a GDI+ bitmap from the raw BGRA data
-                        using (Bitmap bitmap = new Bitmap(width: width, height: height, stride: stride, format: PixelFormat.Format32bppRgb, scan0: dataPtr))
+                        // Copy data to managed array first for safer processing
+                        int totalBytes = height * stride;
+                        byte[] pixelData = new byte[totalBytes];
+                        Marshal.Copy(dataPtr, pixelData, 0, totalBytes);
+                        
+                        Console.WriteLine($"[DirectX] Copied {totalBytes} bytes of pixel data");
+                        
+                        // Check if pixel data is all zeros (black screen)
+                        bool hasNonZeroPixels = false;
+                        for (int i = 0; i < Math.Min(10000, totalBytes); i++) // Check first 10KB
                         {
+                            if (pixelData[i] != 0)
+                            {
+                                hasNonZeroPixels = true;
+                                break;
+                            }
+                        }
+                        Console.WriteLine($"[DirectX] Has non-zero pixels in sample: {hasNonZeroPixels}");
+
+                        // Create bitmap and copy data properly
+                        using (Bitmap bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb))
+                        {
+                            BitmapData bmpData = bitmap.LockBits(new Rectangle(0, 0, width, height), 
+                                ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                            
+                            try
+                            {
+                                // Copy the data row by row to handle stride differences
+                                int bytesPerLine = width * 4;
+                                for (int y = 0; y < height; y++)
+                                {
+                                    int srcOffset = y * stride;
+                                    IntPtr dstPtr = bmpData.Scan0 + (y * bmpData.Stride);
+                                    
+                                    // Copy one row
+                                    Marshal.Copy(pixelData, srcOffset, dstPtr, Math.Min(bytesPerLine, bmpData.Stride));
+                                }
+                            }
+                            finally
+                            {
+                                bitmap.UnlockBits(bmpData);
+                            }
+
                             using (MemoryStream ms = new MemoryStream())
                             {
                                 bitmap.Save(stream: ms, format: ImageFormat.Png);
                                 byte[] result_bytes = ms.ToArray();
                                 Console.WriteLine($"[DirectX] Screenshot completed successfully, size: {result_bytes.Length} bytes");
+                                
+                                // Additional debug info
+                                if (result_bytes.Length < 50000) // Suspiciously small
+                                {
+                                    Console.WriteLine("[DirectX] WARNING: Screenshot file size is suspiciously small, might be black/empty");
+                                }
+                                
                                 return result_bytes;
                             }
                         }
@@ -166,11 +216,11 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine(value: $"[DirectX] TakeScreenshot failed: {ex.Message}");
-            Console.WriteLine(value: $"[DirectX] Exception type: {ex.GetType().Name}");
+            Console.WriteLine($"[DirectX] TakeScreenshot failed: {ex.Message}");
+            Console.WriteLine($"[DirectX] Exception type: {ex.GetType().Name}");
             if (ex.InnerException != null)
             {
-                Console.WriteLine(value: $"[DirectX] Inner exception: {ex.InnerException.Message}");
+                Console.WriteLine($"[DirectX] Inner exception: {ex.InnerException.Message}");
             }
             // Clean up in case of error to allow re-initialization
             Dispose();
@@ -195,7 +245,7 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
     {
         if (_isDisposed)
         {
-            throw new ObjectDisposedException(objectName: nameof(DirectXScreenshotProvider));
+            throw new ObjectDisposedException(nameof(DirectXScreenshotProvider));
         }
 
         if (_outputDuplication != null) 
@@ -243,7 +293,21 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
             }
             
             Dispose(); // Clean up partial initializations
-            throw new Exception(message: "Failed to initialize DirectX components.", innerException: ex);
+            throw new Exception("Failed to initialize DirectX components.", ex);
         }
+    }
+
+    // P/Invoke to get current session ID
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentProcessId();
+    
+    [DllImport("kernel32.dll")]
+    private static extern bool ProcessIdToSessionId(uint processId, out uint sessionId);
+    
+    private static uint GetCurrentSessionId()
+    {
+        uint processId = GetCurrentProcessId();
+        ProcessIdToSessionId(processId, out uint sessionId);
+        return sessionId;
     }
 }
