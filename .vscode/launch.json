@@ -1,0 +1,133 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug ScreenshotCapture CLI - DirectX Provider",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/ScreenshotCapture/bin/Debug/net9.0/ScreenshotCapture.dll",
+            "args": [
+                "cli",
+                "--provider",
+                "DirectX",
+                "--verbose"
+            ],
+            "cwd": "${workspaceFolder}/src/ScreenshotCapture",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "openOnSessionStart",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Debug ScreenshotCapture CLI - Status Check",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/ScreenshotCapture/bin/Debug/net9.0/ScreenshotCapture.dll",
+            "args": [
+                "cli",
+                "--status",
+                "--verbose"
+            ],
+            "cwd": "${workspaceFolder}/src/ScreenshotCapture",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "openOnSessionStart",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Debug ScreenshotCapture CLI - WinAPI Provider",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/ScreenshotCapture/bin/Debug/net9.0/ScreenshotCapture.dll",
+            "args": [
+                "cli",
+                "--provider",
+                "WinAPI",
+                "--verbose"
+            ],
+            "cwd": "${workspaceFolder}/src/ScreenshotCapture",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "openOnSessionStart",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Debug ScreenshotCapture CLI - Auto Provider",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/ScreenshotCapture/bin/Debug/net9.0/ScreenshotCapture.dll",
+            "args": [
+                "cli",
+                "--verbose"
+            ],
+            "cwd": "${workspaceFolder}/src/ScreenshotCapture",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "openOnSessionStart",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Debug ScreenshotCapture Service Mode",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/ScreenshotCapture/bin/Debug/net9.0/ScreenshotCapture.dll",
+            "args": [
+                "service",
+                "--verbose"
+            ],
+            "cwd": "${workspaceFolder}/src/ScreenshotCapture",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "openOnSessionStart",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Debug WorkerService",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/WorkerService/bin/Debug/net9.0/WorkerService.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/WorkerService",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "openOnSessionStart",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Debug WatchdogService",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/WatchdogService/bin/Debug/net9.0/WatchdogService.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/WatchdogService",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "openOnSessionStart",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        }
+    ]
+}

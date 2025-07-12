@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "name": "C#",
+            "type": "csharp",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/ScreenshotCapture/bin/Debug/net9.0/ScreenshotCapture.dll",
+            "args": ["cli", "--provider", "DirectX", "--verbose"],
+            "cwd": "${workspaceFolder}/src/ScreenshotCapture",
+            "console": "integratedTerminal",
+            "stopAtEntry": false
+        }
+    ]
+}
