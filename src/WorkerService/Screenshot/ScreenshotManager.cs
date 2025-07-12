@@ -15,9 +15,9 @@ public class ScreenshotManager
         // Initialize providers in order of preference as specified in README
         _providers = new List<IScreenshotProvider>
         {
-            // new WindowsGraphicsCaptureProvider(),  // Solution 1: Most secure and modern
-            new DirectXScreenshotProvider() // Solution 2: High performance
-            // new WinApiScreenshotProvider()         // Solution 3: Most compatible fallback
+            // new WindowsGraphicsCaptureProvider(),  // Solution 1: Most secure and modern (commented out for now)
+            new DirectXScreenshotProvider(),      // Solution 2: High performance
+            new WinApiScreenshotProvider()         // Solution 3: Most compatible fallback
         };
     }
 

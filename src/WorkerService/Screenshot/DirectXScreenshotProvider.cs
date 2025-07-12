@@ -51,15 +51,19 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         try
         {
             Initialize();
-            return _outputDuplication != null;
+            bool isAvailable = _outputDuplication != null;
+            Console.WriteLine($"[DirectX] IsAvailable check: {isAvailable}");
+            return isAvailable;
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[DirectX] IsAvailable failed: {ex.Message}");
             return false;
         }
         finally
         {
-            Dispose();
+            // Don't dispose here, keep the connection for subsequent calls
+            // Dispose();
         }
     }
 
@@ -67,26 +71,53 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
     {
         try
         {
-            Initialize();
+            // Always try to initialize if not already done
+            if (_outputDuplication == null)
+            {
+                Initialize();
+            }
 
             if (_device == null || _outputDuplication == null)
             {
-                throw new InvalidOperationException(message: "DXGI components not initialized.");
+                Console.WriteLine("[DirectX] Device or OutputDuplication is null");
+                return null;
             }
 
-            Result result = _outputDuplication.TryAcquireNextFrame(timeoutInMilliseconds: 1000, frameInfoRef: out _, desktopResourceOut: out Resource desktopResource);
+            Console.WriteLine("[DirectX] Attempting to acquire next frame...");
+            
+            // Try with a longer timeout for the first frame
+            Result result = _outputDuplication.TryAcquireNextFrame(timeoutInMilliseconds: 5000, frameInfoRef: out _, desktopResourceOut: out Resource desktopResource);
 
             if (!result.Success)
             {
+                Console.WriteLine($"[DirectX] AcquireNextFrame failed with result: {result.Code:X}");
+                
+                // Check for common DXGI error codes
+                if (result.Code == ResultCode.AccessLost.Result.Code)
+                {
+                    Console.WriteLine("[DirectX] Access lost - display mode change or device removed");
+                }
+                else if (result.Code == ResultCode.WaitTimeout.Result.Code)
+                {
+                    Console.WriteLine("[DirectX] Wait timeout - no new frame available");
+                }
+                else if (result.Code == ResultCode.InvalidCall.Result.Code)
+                {
+                    Console.WriteLine("[DirectX] Invalid call - duplication may not be initialized properly");
+                }
+                
                 // If the error is DXGI_ERROR_WAIT_TIMEOUT, it's not a fatal error.
                 // But for a single screenshot, we can consider it a failure.
                 if (result.Code != ResultCode.WaitTimeout.Result.Code)
                 {
+                    Console.WriteLine("[DirectX] Non-timeout error, disposing and will re-initialize on next attempt");
                     // For other errors, re-initialize on next attempt
                     Dispose();
                 }
                 return null;
             }
+
+            Console.WriteLine("[DirectX] Frame acquired successfully, processing...");
 
             using (desktopResource)
             using (Texture2D? desktopImage = desktopResource.QueryInterface<Texture2D>())
@@ -112,13 +143,17 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
                         int stride = dataBox.RowPitch;
                         IntPtr dataPtr = dataBox.DataPointer;
 
+                        Console.WriteLine($"[DirectX] Creating bitmap: {width}x{height}, stride: {stride}");
+
                         // Create a GDI+ bitmap from the raw BGRA data
                         using (Bitmap bitmap = new Bitmap(width: width, height: height, stride: stride, format: PixelFormat.Format32bppRgb, scan0: dataPtr))
                         {
                             using (MemoryStream ms = new MemoryStream())
                             {
                                 bitmap.Save(stream: ms, format: ImageFormat.Png);
-                                return ms.ToArray();
+                                byte[] result_bytes = ms.ToArray();
+                                Console.WriteLine($"[DirectX] Screenshot completed successfully, size: {result_bytes.Length} bytes");
+                                return result_bytes;
                             }
                         }
                     }
@@ -131,7 +166,12 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine(value: $"[Error] DirectX Provider failed: {ex.Message}");
+            Console.WriteLine(value: $"[DirectX] TakeScreenshot failed: {ex.Message}");
+            Console.WriteLine(value: $"[DirectX] Exception type: {ex.GetType().Name}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine(value: $"[DirectX] Inner exception: {ex.InnerException.Message}");
+            }
             // Clean up in case of error to allow re-initialization
             Dispose();
             return null;
@@ -139,7 +179,15 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
         finally
         {
             // Release the frame after we are done with it
-            _outputDuplication?.ReleaseFrame();
+            try
+            {
+                _outputDuplication?.ReleaseFrame();
+                Console.WriteLine("[DirectX] Frame released");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DirectX] Error releasing frame: {ex.Message}");
+            }
         }
     }
 
@@ -150,24 +198,50 @@ public class DirectXScreenshotProvider : IScreenshotProvider, IDisposable
             throw new ObjectDisposedException(objectName: nameof(DirectXScreenshotProvider));
         }
 
-        if (_outputDuplication != null) return;
+        if (_outputDuplication != null) 
+        {
+            Console.WriteLine("[DirectX] Already initialized");
+            return;
+        }
+
+        Console.WriteLine("[DirectX] Initializing DirectX components...");
 
         try
         {
             using (Factory1 factory = new Factory1())
-            using (Adapter1? adapter = factory.GetAdapter1(index: 0))  // 0 = default adapter
-            using (Output? output = adapter.GetOutput(outputIndex: 0)) // 0 = primary output
             {
-                _device = new Device(adapter: adapter, flags: DeviceCreationFlags.BgraSupport);
-
-                using (Output1? output1 = output.QueryInterface<Output1>())
+                Console.WriteLine($"[DirectX] Created factory, adapter count: {factory.GetAdapterCount1()}");
+                
+                using (Adapter1? adapter = factory.GetAdapter1(index: 0))  // 0 = default adapter
                 {
-                    _outputDuplication = output1.DuplicateOutput(deviceRef: _device);
+                    Console.WriteLine($"[DirectX] Using adapter: {adapter.Description.Description}");
+                    Console.WriteLine($"[DirectX] Output count: {adapter.GetOutputCount()}");
+                    
+                    using (Output? output = adapter.GetOutput(outputIndex: 0)) // 0 = primary output
+                    {
+                        Console.WriteLine($"[DirectX] Using output: {output.Description.DeviceName}");
+                        
+                        _device = new Device(adapter: adapter, flags: DeviceCreationFlags.BgraSupport);
+                        Console.WriteLine("[DirectX] Device created successfully");
+
+                        using (Output1? output1 = output.QueryInterface<Output1>())
+                        {
+                            _outputDuplication = output1.DuplicateOutput(deviceRef: _device);
+                            Console.WriteLine("[DirectX] Output duplication created successfully");
+                        }
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[DirectX] Initialization failed: {ex.Message}");
+            Console.WriteLine($"[DirectX] Exception type: {ex.GetType().Name}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"[DirectX] Inner exception: {ex.InnerException.Message}");
+            }
+            
             Dispose(); // Clean up partial initializations
             throw new Exception(message: "Failed to initialize DirectX components.", innerException: ex);
         }
