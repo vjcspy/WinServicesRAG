@@ -2,17 +2,11 @@ using WinServicesRAG.Core.Screenshot;
 
 namespace WorkerService;
 
-public class Worker : BackgroundService
+public class Worker(ILogger<Worker> logger, ScreenshotManager screenshotManager) : BackgroundService
 {
-    private readonly ILogger<Worker> _logger;
-    private readonly ScreenshotManager _screenshotManager;
+    private readonly ILogger<Worker> _logger = logger;
+    private readonly ScreenshotManager _screenshotManager = screenshotManager;
     private bool _testCompleted = false;
-
-    public Worker(ILogger<Worker> logger, ScreenshotManager screenshotManager)
-    {
-        _logger = logger;
-        _screenshotManager = screenshotManager;
-    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -41,7 +35,7 @@ public class Worker : BackgroundService
         try
         {
             // Create test output directory
-            string testDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ScreenshotTests");
+            string testDir = @"D:\Documents\Pictures\test_screen_shot";
             Directory.CreateDirectory(testDir);
             _logger.LogInformation("Test output directory: {TestDir}", testDir);
 
