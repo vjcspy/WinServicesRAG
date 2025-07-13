@@ -112,19 +112,22 @@ Since ScreenshotCapture cannot run as Windows Service (due to session constraint
 
 ## Phase 1: Planning & Design
 
-- [ ] **Requirement Analysis:** Completed, core requirements have been identified.
-- [ ] **System Architecture Design:**
-   - [ ] Overall architecture diagram (describing the interaction between Worker, Watchdog, and the API Server).
-   - [ ] Clearly define the internal communication protocol between Worker and Watchdog (e.g., Named Pipes, Memory-Mapped Files).
-- [ ] **API Client Design:**
-   - [ ] Define models (C\# classes) corresponding to the JSON returned from the API.
-   - [ ] Build a dedicated `ApiClient` class responsible for the calls:
+- [x] **Requirement Analysis:** Completed, core requirements have been identified.
+- [x] **System Architecture Design:**
+   - [x] Overall architecture diagram (describing the interaction between Worker, Watchdog, and the API Server).
+   - [x] Clearly define the internal communication protocol between Worker and Watchdog (Independent dual API architecture - no direct communication).
+- [x] **API Client Design:**
+   - [x] Define models (C# classes) corresponding to the JSON returned from the API.
+   - [x] Build a dedicated `ApiClient` class responsible for the calls:
       - `GetJobAsync(string jobId)`
+      - `GetJobsAsync(string status, string? jobType, int limit)`
       - `UploadImageAsync(byte[] imageData, string fileName)`
       - `UpdateJobStatusAsync(string jobId, string status, string imageName, string errorMessage)`
-- [ ] **Development Environment Setup:**
-   - [ ] Create a Git repository.
-   - [ ] Structure the Visual Studio solution with 3 separate projects (WorkerService, WatchdogService, ScreenshotCapture) and 1 shared project (Shared/Common).
+      - `UploadImageAndUpdateJobAsync(string jobId, byte[] imageData, string fileName)`
+      - `HealthCheckAsync()`
+- [x] **Development Environment Setup:**
+   - [x] Create a Git repository.
+   - [x] Structure the Visual Studio solution with 3 separate projects (WorkerService, WatchdogService, ScreenshotCapture) and 1 shared project (WinServicesRAG.Core).
    - [ ] Set up a basic CI/CD pipeline (e.g., GitHub Actions, Azure DevOps).
 
 -----
@@ -133,31 +136,31 @@ Since ScreenshotCapture cannot run as Windows Service (due to session constraint
 
 This is the main service that implements the business logic.
 
-- [ ] **Step 1: Initialize Windows Service:**
+- [x] **Step 1: Initialize Windows Service:**
 
-   - [ ] Create a Worker Service project using the .NET template.
-   - [ ] Integrate TopShelf to configure the service (service name, description, run-as account - `LocalSystem`).
-   - [ ] Configure logging (Serilog/NLog) to write to a file and be viewable in DebugView.
+   - [x] Create a Worker Service project using the .NET template.
+   - [x] Integrate Serilog for logging configuration (service name, description, run-as account).
+   - [x] Configure logging (Serilog) to write to a file and be viewable in DebugView.
 
-- [ ] **Step 2: Implement the Main Processing Flow with Rx.NET:**
+- [x] **Step 2: Implement the Main Processing Flow with Rx.NET:**
 
-   - [ ] Use `Observable.Interval` to periodically call the API to get jobs.
-   - [ ] Filter for jobs where `status == "TAKE_SCREEN_SHOT"`.
-   - [ ] Process jobs asynchronously using `SelectMany` and `ObserveOn`.
-   - [ ] **Screenshot Delegation:** WorkerService focuses on API communication and job processing, not screenshot capture.
-   - [ ] **Job Processing Flow:**
-      1. Poll API for jobs with `status == "TAKE_SCREEN_SHOT"`
-      2. Store job details to filesystem/database for ScreenshotCapture to process
+   - [x] Implement `JobProcessingEngineBase` with `Observable.Interval` to periodically call the API to get jobs.
+   - [x] Filter for jobs where `status == "PENDING"` (WorkerService) and `status == "TAKE_SCREEN_SHOT"` (ScreenshotCapture).
+   - [x] Process jobs asynchronously using `SelectMany` and `ObserveOn` with Reactive Extensions.
+   - [x] **Screenshot Delegation:** WorkerService focuses on API communication and job processing, not screenshot capture.
+   - [x] **Job Processing Flow:**
+      1. Poll API for jobs with appropriate status filters
+      2. Process jobs based on type (SystemInfo, FileOperation, CustomCommand, etc.)
       3. Update job status and handle API communication
-      4. Monitor for completed screenshot results
-   - [ ] **Error Handling Flow:**
-      1.  **In the Main Observable Stream:** Wrap the processing steps (screenshot delegation, upload, update job) in a child `Observable`.
-      2.  **Screenshot Error:** If screenshot processing fails, log error and update job status appropriately.
+      4. Monitor for completed job results via observables
+   - [x] **Error Handling Flow:**
+      1.  **In the Main Observable Stream:** Wrap the processing steps in child `Observable` with retry logic.
+      2.  **Processing Error:** If job processing fails, log error and update job status appropriately.
       3.  **API Error (Upload/Update):** Use the `Retry(3)` operator on the `HttpClient` call. If it still fails after 3 attempts, log a critical error.
       4.  **`Catch` Operator:** Use `Catch` to handle errors from the child processing stream. When an error occurs, it will switch to another stream to call the API to update the status to `ERROR` along with the `error_message`.
       5.  **`Finally` Operator:** Regardless of success or failure, ensure resource cleanup (e.g., temporary files, process handles).
 
-- [ ] **Step 3: Develop the Screenshot Module (Critical Task):** ✅ **COMPLETED**
+- [x] **Step 3: Develop the Screenshot Module (Critical Task):** ✅ **COMPLETED**
 
    **Architecture Implementation:** Successfully implemented as an independent parallel service with modern technology stack.
 
@@ -177,6 +180,8 @@ This is the main service that implements the business logic.
       - [x] Verbose logging support for troubleshooting
       - [x] Comprehensive error handling and retry mechanisms
       - [x] Modern .NET 9 compatibility with Vortice.Windows DirectX wrapper
+      - [x] **New:** Async API integration with `IScreenshotManager` interface
+      - [x] **New:** Enhanced `ScreenshotResult` model with detailed error information
    
    - [x] **Test Results (Windows 11):**
       - [x] ✅ DirectX Desktop Duplication API: Available in user session, high performance
@@ -185,32 +190,40 @@ This is the main service that implements the business logic.
       - [x] ✅ Automatic provider fallback working correctly
       - [x] ✅ CLI testing interface functional and user-friendly
 
-  ### Secure Window Screenshot Solutions (Updated for Windows 11)
+- [x] **Step 4: Finalize API Client and Upload Flow:**
 
-  | Criteria | Solution 1: DirectX Desktop Duplication API (Vortice) | Solution 2: Windows Graphics Capture API | Solution 3: WinAPI (BitBlt + PrintWindow) |
-      | :--- | :--- | :--- | :--- |
-  | **Description** | Modern DirectX Desktop Duplication API using Vortice.Windows wrapper. High performance, operates at GPU level. | A modern Windows 10+ API that allows for safe and efficient recording of a window's or the entire screen's content. | Uses traditional GDI/User32 functions. `BitBlt` for the entire screen and `PrintWindow` for specific windows. |
-  | **Pros** | - **Extremely High Performance:** GPU-level operations.\<br\>- **Captures everything:** Including full-screen games, overlays.\<br\>- **Modern Wrapper:** Vortice.Windows is actively maintained.\<br\>- **Optimized for Windows 11** | - **Official & Secure:** Recommended by Microsoft.\<br\>- **Efficient:** Hardware-optimized.\<br\>- **Captures most content:** Including UAC, UWP apps, protected content (except DRM). | - **Wide Compatibility:** Works on all Windows versions.\<br\>- **Simpler:** Easier to implement than DirectX.\<br\>- `PrintWindow` can sometimes capture windows that `BitBlt` cannot. |
-  | **Cons** | - **Session Requirements:** Requires user session, not available in Session 0.\<br\>- **Driver Dependencies:** May not work without proper GPU drivers. | - **Requires Windows 10 (1803+)**.\<br\>- **Currently Disabled:** .NET compatibility issues with Windows Runtime.\<br\>- **Complex Setup:** Requires proper UWP context initialization. | - **Unreliable:** Fails with UAC, DirectX/OpenGL full-screen, transparent windows, protected content.\<br\>- **`PrintWindow` does not always work.** |
-  | **Implementation Status** | ✅ **IMPLEMENTED** - Working with Vortice.Windows | ⚠️ **DISABLED** - Pending .NET compatibility fixes | ✅ **IMPLEMENTED** - Working fallback |
-  | **Test Results** | ✅ Successfully captures desktop in user session | ❌ Not available due to .NET Runtime limitations | ✅ Captures desktop successfully, 219KB output |
+   - [x] Implement `HttpClientFactory` to create the client.
+   - [x] Build the logic to call the `POST /upload/image` API with `MultipartFormDataContent`.
+   - [x] Build the logic to call the `PATCH /job/{job_id}` API to update the status to `TAKE_SCREEN_SHOT_SUCCESS` or `ERROR`.
+   - [x] **New:** Comprehensive retry logic with configurable attempts and delays
+   - [x] **New:** Structured error handling with typed responses
+   - [x] **New:** Health check endpoint support for monitoring API connectivity
 
-- [ ] **Step 4: Finalize API Client and Upload Flow:**
+- [x] **Step 5: Core Shared Library Implementation:**
 
-   - [ ] Implement `HttpClientFactory` to create the client.
-   - [ ] Build the logic to call the `POST /upload/image` API with `MultipartFormDataContent`.
-   - [ ] Build the logic to call the `PATCH /job/{job_id}` API to update the status to `TAKE_SCREEN_SHOT_SUCCESS` or `ERROR`.
+   - [x] **WinServicesRAG.Core Library:** Centralized shared functionality for all services
+      - [x] **API Models:** `JobModel`, `UpdateJobStatusRequest`, `ApiResponse<T>`, `JobListResponse`, `ImageUploadResponse`
+      - [x] **Configuration:** `ApiClientOptions` with comprehensive settings (retry, timeout, authentication)
+      - [x] **Services:** 
+         - `IApiClient` and `ApiClient` implementation with retry logic and error handling
+         - `IScreenshotManager` and enhanced `ScreenshotManager` with async support
+      - [x] **Processing Engines:** 
+         - `JobProcessingEngineBase` - Abstract base with Rx.NET implementation
+         - `ScreenshotJobProcessingEngine` - Specialized for screenshot tasks
+         - `GeneralJobProcessingEngine` - For system info, file operations, custom commands
+      - [x] **Dependency Injection:** `ServiceCollectionExtensions` for easy configuration
+         - `AddWinServicesRAGCore()` - Core services registration
+         - `AddScreenshotServices()` - ScreenshotCapture-specific configuration
+         - `AddWorkerServices()` - WorkerService-specific configuration
+         - `ValidateConfiguration()` - Configuration validation
 
-- [ ] **Step 5: ScreenshotCapture Independent Service:**
+- [x] **Step 6: WorkerService Integration:**
 
-   - [ ] Create a new console application project `ScreenshotCapture`.
-   - [ ] Configure the application to run as a background service (hidden console window).
-   - [ ] Implement independent job polling from shared filesystem/database.
-   - [ ] Implement all 3 screenshot providers with full DirectX and Windows Graphics Capture API support.
-   - [ ] Add direct API communication for screenshot uploads and status updates.
-   - [ ] Implement proper error handling and retry mechanisms.
-   - [ ] Add comprehensive logging for debugging purposes.
-   - [ ] Design for WatchdogService monitoring and management.
+   - [x] Updated WorkerService to use new Core library
+   - [x] Dependency injection configuration with proper API client setup
+   - [x] Observable-based job processing with error handling
+   - [x] Configuration files with development and production settings
+   - [x] Enhanced logging with structured output and performance monitoring
 
 -----
 
