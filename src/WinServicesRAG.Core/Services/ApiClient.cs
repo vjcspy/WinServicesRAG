@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using WinServicesRAG.Core.Models;
+using WinServicesRAG.Core.Value;
 namespace WinServicesRAG.Core.Services;
 
 /// <summary>
@@ -43,20 +44,13 @@ public sealed class ApiClient : IApiClient, IDisposable
         {
             _logger.LogDebug(message: "Getting job {JobId}", jobName);
 
-            var response = await ExecuteWithRetryAsync(operation: async () =>
+            JobModel? response = await ExecuteWithRetryAsync(operation: async () =>
             {
-                HttpResponseMessage httpResponse = await _httpClient.GetAsync(requestUri: $"/api/jobs/{jobName}", cancellationToken: cancellationToken);
-                return await ProcessHttpResponseAsync<ApiResponse<JobModel>>(response: httpResponse);
+                HttpResponseMessage httpResponse = await _httpClient.GetAsync(requestUri: $"/{CommonValue.JOB_URL_PATH}/{jobName}", cancellationToken: cancellationToken);
+                return await ProcessHttpResponseAsync<JobModel>(response: httpResponse);
             }, cancellationToken: cancellationToken);
 
-            if (response is { Success: true, Data: not null })
-            {
-                _logger.LogDebug(message: "Successfully retrieved job {JobId} with status {Status}", jobName, response.Data.Status);
-                return response.Data;
-            }
-
-            _logger.LogWarning(message: "Job {JobId} not found or API returned unsuccessful response", jobName);
-            return null;
+            return response;
         }
         catch (Exception ex)
         {
@@ -65,49 +59,49 @@ public sealed class ApiClient : IApiClient, IDisposable
         }
     }
 
-    public async Task<List<JobModel>> GetJobsAsync(string status, string? jobType = null, int limit = 100, CancellationToken cancellationToken = default(CancellationToken))
-    {
-        if (string.IsNullOrEmpty(value: status))
-            throw new ArgumentException(message: "Status cannot be null or empty", paramName: nameof(status));
-
-        try
-        {
-            _logger.LogDebug(message: "Getting jobs with status {Status}, type {JobType}, limit {Limit}", status, jobType ?? "any", limit);
-
-            var queryParams = new List<string>
-            {
-                $"status={Uri.EscapeDataString(stringToEscape: status)}",
-                $"limit={limit}"
-            };
-
-            if (!string.IsNullOrEmpty(value: jobType))
-            {
-                queryParams.Add(item: $"type={Uri.EscapeDataString(stringToEscape: jobType)}");
-            }
-
-            var queryString = string.Join(separator: "&", values: queryParams);
-
-            var response = await ExecuteWithRetryAsync(operation: async () =>
-            {
-                HttpResponseMessage httpResponse = await _httpClient.GetAsync(requestUri: $"/api/jobs?{queryString}", cancellationToken: cancellationToken);
-                return await ProcessHttpResponseAsync<ApiResponse<JobListResponse>>(response: httpResponse);
-            }, cancellationToken: cancellationToken);
-
-            if (response?.Success == true && response.Data?.Jobs != null)
-            {
-                _logger.LogDebug(message: "Successfully retrieved {Count} jobs with status {Status}", response.Data.Jobs.Count, status);
-                return response.Data.Jobs;
-            }
-
-            _logger.LogWarning(message: "No jobs found with status {Status} or API returned unsuccessful response", status);
-            return new List<JobModel>();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(exception: ex, message: "Failed to get jobs with status {Status}", status);
-            return new List<JobModel>();
-        }
-    }
+    // public async Task<List<JobModel>> GetJobsAsync(string status, string? jobType = null, int limit = 100, CancellationToken cancellationToken = default(CancellationToken))
+    // {
+    //     if (string.IsNullOrEmpty(value: status))
+    //         throw new ArgumentException(message: "Status cannot be null or empty", paramName: nameof(status));
+    //
+    //     try
+    //     {
+    //         _logger.LogDebug(message: "Getting jobs with status {Status}, type {JobType}, limit {Limit}", status, jobType ?? "any", limit);
+    //
+    //         var queryParams = new List<string>
+    //         {
+    //             $"status={Uri.EscapeDataString(stringToEscape: status)}",
+    //             $"limit={limit}"
+    //         };
+    //
+    //         if (!string.IsNullOrEmpty(value: jobType))
+    //         {
+    //             queryParams.Add(item: $"type={Uri.EscapeDataString(stringToEscape: jobType)}");
+    //         }
+    //
+    //         var queryString = string.Join(separator: "&", values: queryParams);
+    //
+    //         var response = await ExecuteWithRetryAsync(operation: async () =>
+    //         {
+    //             HttpResponseMessage httpResponse = await _httpClient.GetAsync(requestUri: $"/api/jobs?{queryString}", cancellationToken: cancellationToken);
+    //             return await ProcessHttpResponseAsync<ApiResponse<JobListResponse>>(response: httpResponse);
+    //         }, cancellationToken: cancellationToken);
+    //
+    //         if (response?.Success == true && response.Data?.Jobs != null)
+    //         {
+    //             _logger.LogDebug(message: "Successfully retrieved {Count} jobs with status {Status}", response.Data.Jobs.Count, status);
+    //             return response.Data.Jobs;
+    //         }
+    //
+    //         _logger.LogWarning(message: "No jobs found with status {Status} or API returned unsuccessful response", status);
+    //         return new List<JobModel>();
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         _logger.LogError(exception: ex, message: "Failed to get jobs with status {Status}", status);
+    //         return new List<JobModel>();
+    //     }
+    // }
 
     public async Task<ImageUploadResponse> UploadImageAsync(byte[] imageData, string fileName, string contentType = "image/png", CancellationToken cancellationToken = default(CancellationToken))
     {
@@ -161,12 +155,11 @@ public sealed class ApiClient : IApiClient, IDisposable
 
         try
         {
-            _logger.LogDebug(message: "Updating job {JobId} status to {Status}", jobName, status);
+            _logger.LogDebug(message: "Updating job {JobName} status to {Status}", jobName, status);
 
             var updateRequest = new UpdateJobStatusRequest
             {
                 Status = status,
-                ImageName = imageName,
                 ErrorMessage = errorMessage,
                 Data = data
             };
@@ -176,22 +169,22 @@ public sealed class ApiClient : IApiClient, IDisposable
                 string json = JsonSerializer.Serialize(value: updateRequest, options: _jsonOptions);
                 using var content = new StringContent(content: json, encoding: Encoding.UTF8, mediaType: "application/json");
 
-                HttpResponseMessage httpResponse = await _httpClient.PatchAsync(requestUri: $"/api/jobs/{jobName}", content: content, cancellationToken: cancellationToken);
+                HttpResponseMessage httpResponse = await _httpClient.PatchAsync(requestUri: $"/image-question-jobs/{jobName}", content: content, cancellationToken: cancellationToken);
                 return await ProcessHttpResponseAsync<ApiResponse<object>>(response: httpResponse);
             }, cancellationToken: cancellationToken);
 
             if (response?.Success == true)
             {
-                _logger.LogDebug(message: "Successfully updated job {JobId} status to {Status}", jobName, status);
+                _logger.LogDebug(message: "Successfully updated job {JobName} status to {Status}", jobName, status);
                 return true;
             }
 
-            _logger.LogWarning(message: "Failed to update job {JobId} status: {Error}", jobName, response?.Error ?? "Unknown error");
+            _logger.LogWarning(message: "Failed to update job {JobName} status: {Error}", jobName, response?.Error ?? "Unknown error");
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(exception: ex, message: "Failed to update job {JobId} status to {Status}", jobName, status);
+            _logger.LogError(exception: ex, message: "Failed to update job {JobName} status to {Status}", jobName, status);
             return false;
         }
     }
@@ -206,7 +199,7 @@ public sealed class ApiClient : IApiClient, IDisposable
             ImageUploadResponse uploadResponse = await UploadImageAsync(imageData: imageData, fileName: fileName, contentType: "image/png", cancellationToken: cancellationToken);
 
             // Update job status with uploaded image name
-            bool updateSuccess = await UpdateJobStatusAsync(jobName: jobId, status: JobStatus.TakeScreenshotSuccess, imageName: uploadResponse.FileName, cancellationToken: cancellationToken);
+            bool updateSuccess = await UpdateJobStatusAsync(jobName: jobId, status: JobStatus.Open, imageName: uploadResponse.FileName, cancellationToken: cancellationToken);
 
             if (updateSuccess)
             {

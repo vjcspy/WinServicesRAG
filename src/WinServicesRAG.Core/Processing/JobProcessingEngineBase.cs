@@ -4,6 +4,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using WinServicesRAG.Core.Models;
 using WinServicesRAG.Core.Services;
+using WinServicesRAG.Core.Value;
 namespace WinServicesRAG.Core.Processing;
 
 /// <summary>
@@ -72,22 +73,6 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
 
         _disposables.Add(item: _processingResults);
         _disposables.Add(item: _processingErrors);
-    }
-
-    /// <summary>
-    ///     Gets the job status to filter for when polling
-    /// </summary>
-    protected abstract string TargetJobStatus { get; }
-
-    /// <summary>
-    ///     Gets the job type to filter for (optional)
-    /// </summary>
-    protected virtual string? TargetJobType
-    {
-        get
-        {
-            return null;
-        }
     }
 
     /// <summary>
@@ -197,7 +182,7 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
     {
         try
         {
-            JobModel? job = await _apiClient.GetJobAsync(jobName: "PBF_EXAM", cancellationToken: cancellationToken);
+            JobModel? job = await _apiClient.GetJobAsync(jobName: CommonValue.GetJobName(), cancellationToken: cancellationToken);
 
             if (job != null)
             {
@@ -224,16 +209,16 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
             .Retry(retryCount: 3) // Retry up to 3 times on failure
             .Catch<JobProcessingResult, Exception>(handler: ex =>
             {
-                _logger.LogError(exception: ex, message: "Failed to process job {JobId} after retries", job.Id);
+                _logger.LogError(exception: ex, message: "Failed to process job {JobId} after retries", job.Name);
 
                 // Update job status to ERROR via API
                 return Observable.FromAsync(functionAsync: async () =>
                 {
-                    await _apiClient.UpdateJobStatusAsync(jobName: job.Id, status: JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
+                    await _apiClient.UpdateJobStatusAsync(jobName: job.Name, status: JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
 
                     return new JobProcessingResult
                     {
-                        JobName = job.Id,
+                        JobName = job.Name,
                         Success = false,
                         ErrorMessage = ex.Message
                     };
@@ -242,7 +227,7 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
             .Finally(finallyAction: () =>
             {
                 // Cleanup resources if needed
-                _logger.LogDebug(message: "Completed processing job {JobId}", job.Id);
+                _logger.LogDebug(message: "Completed processing job {JobId}", job.Name);
             });
     }
 

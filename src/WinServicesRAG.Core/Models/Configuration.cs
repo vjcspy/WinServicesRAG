@@ -48,12 +48,11 @@ public class ApiClientOptions
 /// </summary>
 public static class JobStatus
 {
-    public const string Pending = "PENDING";
-    public const string TakeScreenshot = "TAKE_SCREEN_SHOT";
-    public const string TakeScreenshotSuccess = "TAKE_SCREEN_SHOT_SUCCESS";
-    public const string Processing = "PROCESSING";
-    public const string Completed = "COMPLETED";
+    public const string Open = "OPEN";
+    public const string AgentAI = "AGENT_AI";
+    public const string AgentScreenCapture = "AGENT_SCREEN_CAPTURE";
     public const string Error = "ERROR";
+    public const string Complete = "COMPLETE";
     public const string Cancelled = "CANCELLED";
 }
 

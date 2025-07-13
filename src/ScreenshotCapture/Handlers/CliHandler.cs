@@ -1,7 +1,10 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ScreenshotCapture.Constant;
 using Serilog;
+using WinServicesRAG.Core.Helper;
 using WinServicesRAG.Core.Models;
 using WinServicesRAG.Core.Observer;
 using WinServicesRAG.Core.Processing;
@@ -15,15 +18,16 @@ public static class CliHandler
     {
         try
         {
+            RuntimeDataHelper.SetData(key: ScreenshotCaptureConstant.RUNTIME_MODE, value: "CLI");
             // Create minimal host for DI
             IHostBuilder hostBuilder = Host.CreateDefaultBuilder()
                 .ConfigureServices(configureDelegate: (context, services) =>
                 {
                     services.AddSingleton<IScreenshotManager, ScreenshotManager>();
-                    services.AddSingleton<IJobProcessingEngine, GeneralJobProcessingEngine>();
-                    
+                    services.AddSingleton<IJobProcessingEngine, ScreenshotJobProcessingEngine>();
+
                     // THAY ĐỔI: Cách đúng để bind configuration
-                    services.Configure<ApiClientOptions>(context.Configuration.GetSection(ApiClientOptions.SectionName));
+                    services.Configure<ApiClientOptions>(config: context.Configuration.GetSection(key: ApiClientOptions.SectionName));
                     services.AddSingleton<IApiClient, ApiClient>();
                     services.AddHttpClient<ApiClient>(); // Đăng ký HttpClient cho ApiClient
                 })
@@ -51,6 +55,8 @@ public static class CliHandler
                     jobProcessingEngine.ProcessingResults.Subscribe(
                         observer: new JobResultObserver(logger: logger));
                     jobProcessingEngine.Start();
+                    Console.ReadKey();
+                    jobProcessingEngine.Stop();
                     break;
                 default:
                     logger.LogInformation(message: "Invalid action specified. Use 'screenshot' or 'poll'.");
