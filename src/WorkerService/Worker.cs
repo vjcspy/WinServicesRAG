@@ -1,85 +1,125 @@
-using WinServicesRAG.Core.Screenshot;
+using WinServicesRAG.Core.Observer;
+using WinServicesRAG.Core.Processing;
+using WinServicesRAG.Core.Services;
 
 namespace WorkerService;
 
-public class Worker(ILogger<Worker> logger, ScreenshotManager screenshotManager) : BackgroundService
+public class Worker : BackgroundService
 {
-    private readonly ILogger<Worker> _logger = logger;
-    private readonly ScreenshotManager _screenshotManager = screenshotManager;
-    private bool _testCompleted = false;
+    private readonly ILogger<Worker> _logger;
+    private readonly IJobProcessingEngine _jobProcessingEngine;
+    private readonly IApiClient _apiClient;
+
+    public Worker(ILogger<Worker> logger, IJobProcessingEngine jobProcessingEngine, IApiClient apiClient)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _jobProcessingEngine = jobProcessingEngine ?? throw new ArgumentNullException(nameof(jobProcessingEngine));
+        _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Run screenshot test once on startup
-        if (!_testCompleted)
-        {
-            await RunScreenshotTest();
-            _testCompleted = true;
-        }
-
-        // Continue with normal worker operations
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-            }
-            await Task.Delay(5000, stoppingToken); // Increased to 5 seconds to reduce log spam
-        }
-    }
-
-    private async Task RunScreenshotTest()
-    {
-        _logger.LogInformation("=== Starting Screenshot Provider Test ===");
+        _logger.LogInformation("WorkerService starting execution");
 
         try
         {
-            // Create test output directory
-            string testDir = @"D:\Documents\Pictures\test_screen_shot";
-            Directory.CreateDirectory(testDir);
-            _logger.LogInformation("Test output directory: {TestDir}", testDir);
-
-            // Test 1: Get provider status
-            _logger.LogInformation("--- Provider Availability Test ---");
-            var providerStatus = _screenshotManager.GetProviderStatus();
-            foreach (var (name, isAvailable) in providerStatus)
+            // Check API connectivity on startup
+            var isHealthy = await _apiClient.HealthCheckAsync(stoppingToken);
+            if (!isHealthy)
             {
-                _logger.LogInformation("Provider: {Name}, Available: {Available}",
-                    name, isAvailable);
+                _logger.LogWarning("API health check failed, but continuing with service startup");
+            }
+            else
+            {
+                _logger.LogInformation("API health check successful");
             }
 
-            foreach (var (name, isAvailable) in providerStatus)
-            {
-                if (!isAvailable) continue;
-                var screenshot = _screenshotManager.TakeScreenshotWithProvider(name);
-                if (screenshot != null)
-                {
-                    string fileName = $"_test_screenshot_{name.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-                    string filePath = Path.Combine(testDir, fileName);
+            // Subscribe to processing results and errors using observers
+            var resultSubscription = _jobProcessingEngine.ProcessingResults.Subscribe(
+                new JobResultObserver(_logger));
 
-                    await File.WriteAllBytesAsync(filePath, screenshot);
-                    _logger.LogInformation("✅ Screenshot captured successfully! Size: {Size} bytes, Saved to: {FilePath}",
-                        screenshot.Length, filePath);
-                }
-                else
+            var errorSubscription = _jobProcessingEngine.ProcessingErrors.Subscribe(
+                new ProcessingErrorObserver(_logger));
+
+            try
+            {
+                // Start the job processing engine
+                _logger.LogInformation("Starting job processing engine");
+                _jobProcessingEngine.Start(stoppingToken);
+
+                // Keep the service running while monitoring the processing engine
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogWarning("❌ Screenshot capture failed for provider {ProviderName}", name);
+                    if (!_jobProcessingEngine.IsRunning)
+                    {
+                        _logger.LogWarning("Job processing engine is not running, attempting to restart");
+                        _jobProcessingEngine.Start(stoppingToken);
+                    }
+
+                    // Log periodic status
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug("WorkerService running at: {Time}, Processing engine status: {IsRunning}", 
+                            DateTimeOffset.Now, _jobProcessingEngine.IsRunning);
+                    }
+
+                    await Task.Delay(10000, stoppingToken); // Check every 10 seconds
                 }
             }
-
-
+            finally
+            {
+                resultSubscription?.Dispose();
+                errorSubscription?.Dispose();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("WorkerService execution was cancelled");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during screenshot testing");
+            _logger.LogError(ex, "Unexpected error in WorkerService execution");
+            throw;
         }
-
-        _logger.LogInformation("=== Screenshot Provider Test Completed ===");
+        finally
+        {
+            _logger.LogInformation("Stopping job processing engine");
+            _jobProcessingEngine.Stop();
+        }
     }
 
     public override void Dispose()
     {
-        _screenshotManager?.Dispose();
+        _jobProcessingEngine?.Dispose();
         base.Dispose();
+    }
+}
+
+
+/// <summary>
+/// Observer for processing errors
+/// </summary>
+internal class ProcessingErrorObserver : IObserver<Exception>
+{
+    private readonly ILogger _logger;
+
+    public ProcessingErrorObserver(ILogger logger)
+    {
+        _logger = logger;
+    }
+
+    public void OnNext(Exception error)
+    {
+        _logger.LogError(error, "Critical error in job processing engine");
+    }
+
+    public void OnError(Exception error)
+    {
+        _logger.LogError(error, "Error in processing error stream");
+    }
+
+    public void OnCompleted()
+    {
+        _logger.LogInformation("Processing error stream completed");
     }
 }

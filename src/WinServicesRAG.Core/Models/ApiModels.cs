@@ -5,7 +5,7 @@ namespace WinServicesRAG.Core.Models;
 /// <summary>
 /// Represents a job from the API server
 /// </summary>
-public class JobModel
+public abstract class JobModel
 {
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
@@ -35,7 +35,7 @@ public class JobModel
 /// <summary>
 /// Job data payload
 /// </summary>
-public class JobData
+public abstract class JobData
 {
     [JsonPropertyName("parameters")]
     public Dictionary<string, object>? Parameters { get; set; }
@@ -65,7 +65,7 @@ public class UpdateJobStatusRequest
 /// <summary>
 /// Response model for API operations
 /// </summary>
-public class ApiResponse<T>
+public abstract class ApiResponse<T>
 {
     [JsonPropertyName("success")]
     public bool Success { get; set; }
@@ -83,7 +83,7 @@ public class ApiResponse<T>
 /// <summary>
 /// Response model for job list
 /// </summary>
-public class JobListResponse
+public abstract class JobListResponse
 {
     [JsonPropertyName("jobs")]
     public List<JobModel> Jobs { get; set; } = new();
@@ -101,7 +101,7 @@ public class JobListResponse
 /// <summary>
 /// Response model for image upload
 /// </summary>
-public class ImageUploadResponse
+public abstract class ImageUploadResponse
 {
     [JsonPropertyName("file_name")]
     public string FileName { get; set; } = string.Empty;

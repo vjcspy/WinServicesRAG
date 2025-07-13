@@ -2,7 +2,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using WinServicesRAG.Core.Models;
+using WinServicesRAG.Core.Observer;
+using WinServicesRAG.Core.Processing;
 using WinServicesRAG.Core.Screenshot;
+using WinServicesRAG.Core.Services;
 namespace ScreenshotCapture.Handlers;
 
 public static class CliHandler
@@ -16,12 +20,16 @@ public static class CliHandler
                 .ConfigureServices(configureDelegate: (context, services) =>
                 {
                     services.AddSingleton<IScreenshotManager, ScreenshotManager>();
+                    services.AddSingleton<IJobProcessingEngine, GeneralJobProcessingEngine>();
+                    services.AddSingleton<IApiClient, ApiClient>();
+                    services.AddSingleton<ApiClientOptions>();
                 })
                 .UseSerilog();
 
             IHost host = hostBuilder.Build();
             var logger = host.Services.GetRequiredService<ILogger<Program>>();
             IScreenshotManager screenshotManager = host.Services.GetRequiredService<IScreenshotManager>();
+            IJobProcessingEngine jobProcessingEngine = host.Services.GetRequiredService<IJobProcessingEngine>();
 
             // Handle status command
             if (status)
@@ -37,6 +45,9 @@ public static class CliHandler
                     break;
                 case "poll":
                     logger.LogInformation(message: "Started polling for screenshots...");
+                    jobProcessingEngine.ProcessingResults.Subscribe(
+                        observer: new JobResultObserver(logger: logger));
+                    jobProcessingEngine.Start();
                     break;
                 default:
                     logger.LogInformation(message: "Invalid action specified. Use 'screenshot' or 'poll'.");
@@ -107,9 +118,9 @@ public static class CliHandler
         }
 
         // Generate filename with provider and datetime
-        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        string filename = $"{actualProvider}_{timestamp}.png";
-        string fullPath = Path.Combine(output, filename);
+        var timestamp = DateTime.Now.ToString(format: "yyyyMMdd_HHmmss");
+        var filename = $"{actualProvider}_{timestamp}.png";
+        string fullPath = Path.Combine(path1: output, path2: filename);
 
         // Save screenshot
         await File.WriteAllBytesAsync(path: fullPath, bytes: screenshotResult.ImageData);
