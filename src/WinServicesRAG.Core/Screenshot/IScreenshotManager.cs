@@ -37,21 +37,4 @@ public interface IScreenshotManager : IDisposable
     /// </summary>
     /// <returns>Dictionary of provider names and their availability status</returns>
     Dictionary<string, bool> GetProviderStatus();
-
-    /// <summary>
-    /// Gets information about available providers
-    /// </summary>
-    /// <returns>List of provider information</returns>
-    List<ProviderInfo> GetProviderInfo();
-}
-
-/// <summary>
-/// Information about a screenshot provider
-/// </summary>
-public class ProviderInfo
-{
-    public string Name { get; set; } = string.Empty;
-    public bool IsAvailable { get; set; }
-    public string Description { get; set; } = string.Empty;
-    public string? ErrorMessage { get; set; }
 }

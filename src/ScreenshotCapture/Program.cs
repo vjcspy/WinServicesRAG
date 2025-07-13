@@ -18,10 +18,6 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     Log.Information(messageTemplate: "=== ScreenshotCapture Independent Service ===");
-    Log.Information(messageTemplate: "A dedicated background service for capturing screenshots in user session");
-    Log.Information(messageTemplate: "Operates independently and parallel with WorkerService");
-    Log.Information(messageTemplate: "Managed by WatchdogService for high availability");
-    Log.Information(messageTemplate: "");
 
     // Create and configure the root command
     RootCommand rootCommand = CommandSetup.CreateRootCommand();

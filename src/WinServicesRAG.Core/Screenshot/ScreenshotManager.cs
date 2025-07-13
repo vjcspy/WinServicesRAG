@@ -54,11 +54,84 @@ public class ScreenshotManager : IScreenshotManager
 
     public Task<ScreenshotResult> TakeScreenshotAsync(CancellationToken cancellationToken = default(CancellationToken))
     {
-        throw new NotImplementedException();
+        _logger.LogInformation(message: "Taking screenshot with first available provider");
+        foreach (IScreenshotProvider provider in _providers)
+        {
+            try
+            {
+                _logger.LogDebug(message: "Trying provider: {ProviderName}", provider.ProviderName);
+
+                if (!provider.IsAvailable())
+                {
+                    _logger.LogDebug(message: "Provider {ProviderName} is not available", provider.ProviderName);
+                    continue;
+                }
+
+                byte[]? screenshot = provider.TakeScreenshot();
+                if (screenshot is { Length: > 0 })
+                {
+                    _logger.LogInformation(message: "Successfully captured screenshot using {ProviderName}: {Size} bytes",
+                        provider.ProviderName, screenshot.Length);
+
+                    return Task.FromResult(result: new ScreenshotResult
+                    {
+                        Success = true,
+                        ImageData = screenshot,
+                        ProviderUsed = provider.ProviderName,
+                        CapturedAt = DateTime.UtcNow
+                    });
+                }
+
+                _logger.LogWarning(message: "Provider {ProviderName} returned null or empty screenshot", provider.ProviderName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(exception: ex, message: "Provider {ProviderName} failed with exception", provider.ProviderName);
+            }
+        }
+
+        return Task.FromResult(result: new ScreenshotResult
+        {
+            Success = false,
+            ErrorMessage = "All screenshot providers failed"
+        });
+
+
     }
     public Task<ScreenshotResult> TakeScreenshotAsync(string providerName, CancellationToken cancellationToken = default(CancellationToken))
     {
-        throw new NotImplementedException();
+        _logger.LogInformation(message: "Taking screenshot with provider: {ProviderName}", providerName);
+        // get provider by name
+        IScreenshotProvider? provider = _providers.FirstOrDefault(predicate: p =>
+            string.Equals(a: p.ProviderName, b: providerName, comparisonType: StringComparison.OrdinalIgnoreCase));
+        if (provider == null)
+        {
+            _logger.LogError(message: "Provider {ProviderName} not found", providerName);
+            return Task.FromResult(result: new ScreenshotResult
+            {
+                Success = false,
+                ErrorMessage = $"Provider {providerName} not found"
+            });
+        }
+        byte[]? imageData = provider.TakeScreenshot();
+        if (imageData == null || imageData.Length == 0)
+        {
+            _logger.LogError(message: "Provider {ProviderName} returned null or empty screenshot", providerName);
+            return Task.FromResult(result: new ScreenshotResult
+            {
+                Success = false,
+                ErrorMessage = $"Provider {providerName} returned null or empty screenshot"
+            });
+        }
+        _logger.LogInformation(message: "Successfully captured screenshot using {ProviderName}: {Size} bytes",
+            provider.ProviderName, imageData.Length);
+        return Task.FromResult(result: new ScreenshotResult
+        {
+            Success = true,
+            ImageData = imageData,
+            ProviderUsed = provider.ProviderName,
+            CapturedAt = DateTime.UtcNow
+        });
     }
     /// <summary>
     ///     Gets information about all providers and their availability
@@ -82,92 +155,6 @@ public class ScreenshotManager : IScreenshotManager
         }
 
         return status;
-    }
-    public List<ProviderInfo> GetProviderInfo()
-    {
-        throw new NotImplementedException();
-    }
-
-    /// <summary>
-    ///     Takes a screenshot using the first available provider
-    /// </summary>
-    /// <returns>PNG image data as byte array, or null if all providers fail</returns>
-    public byte[]? TakeScreenshot()
-    {
-        if (_isDisposed)
-        {
-            _logger.LogError(message: "ScreenshotManager has been disposed");
-            return null;
-        }
-
-        _logger.LogDebug(message: "Attempting to take screenshot using {ProviderCount} providers", _providers.Count);
-
-        foreach (IScreenshotProvider provider in _providers)
-        {
-            try
-            {
-                _logger.LogDebug(message: "Trying provider: {ProviderName}", provider.ProviderName);
-
-                if (!provider.IsAvailable())
-                {
-                    _logger.LogDebug(message: "Provider {ProviderName} is not available", provider.ProviderName);
-                    continue;
-                }
-
-                byte[]? screenshot = provider.TakeScreenshot();
-                if (screenshot != null && screenshot.Length > 0)
-                {
-                    _logger.LogInformation(message: "Successfully captured screenshot using {ProviderName}: {Size} bytes",
-                        provider.ProviderName, screenshot.Length);
-                    return screenshot;
-                }
-
-                _logger.LogWarning(message: "Provider {ProviderName} returned null or empty screenshot", provider.ProviderName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(exception: ex, message: "Provider {ProviderName} failed with exception", provider.ProviderName);
-                // Continue to next provider
-            }
-        }
-
-        _logger.LogError(message: "All screenshot providers failed");
-        return null;
-    }
-
-    /// <summary>
-    ///     Force a specific provider to be used
-    /// </summary>
-    /// <param name="providerName">Name of the provider to use</param>
-    /// <returns>Screenshot data or null if provider not found or fails</returns>
-    public byte[]? TakeScreenshotWithProvider(string providerName)
-    {
-        IScreenshotProvider? provider = _providers.FirstOrDefault(predicate: p =>
-            string.Equals(a: p.ProviderName, b: providerName, comparisonType: StringComparison.OrdinalIgnoreCase));
-
-        if (provider == null)
-        {
-            _logger.LogError(message: "Provider {ProviderName} not found", providerName);
-            return null;
-        }
-
-        _logger.LogInformation(message: "Using specific provider: {ProviderName}", providerName);
-
-        try
-        {
-            if (!provider.IsAvailable())
-            {
-                _logger.LogError(message: "Provider {ProviderName} is not available", providerName);
-                return null;
-            }
-
-            return provider.TakeScreenshot();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(exception: ex, message: "Provider {ProviderName} failed", providerName);
-            return null;
-        }
     }
 
     private void InitializeProviders()

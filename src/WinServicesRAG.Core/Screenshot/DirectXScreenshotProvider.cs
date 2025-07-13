@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging;
 using SharpGen.Runtime;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
@@ -95,14 +94,14 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
             IDXGIResource? desktopResource = null;
             ID3D11Texture2D? desktopImage = null;
             ID3D11Texture2D? stagingTexture = null;
-            MappedSubresource mappedResource = default(MappedSubresource);
-
+            var mappedResource = default(MappedSubresource);
+            Thread.Sleep(millisecondsTimeout: 700); // Giảm độ trễ để tránh lỗi AccessLost do quá trình khởi tạo DirectX
             try
             {
                 logger.LogDebug(message: "Attempting to acquire frame from DirectX Desktop Duplication API.");
 
                 // Loop để thử lấy frame, xử lý AccessLost
-                for (int i = 0; i < 2; i++) // Thử lại 1 lần nếu AccessLost
+                for (var i = 0; i < 2; i++) // Thử lại 1 lần nếu AccessLost
                 {
                     Result result = _outputDuplication.AcquireNextFrame(
                         timeoutInMilliseconds: 500, // Giảm timeout để phản hồi nhanh hơn nếu không có frame
@@ -148,7 +147,7 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
                 Texture2DDescription textureDesc = desktopImage.Description;
 
                 // Tạo staging texture
-                Texture2DDescription stagingDesc = new Texture2DDescription
+                var stagingDesc = new Texture2DDescription
                 {
                     Width = textureDesc.Width,
                     Height = textureDesc.Height,
@@ -272,7 +271,7 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
 
     private unsafe byte[] ConvertToImage(MappedSubresource mappedResource, int width, int height)
     {
-        using Bitmap bitmap = new Bitmap(width: width, height: height, format: PixelFormat.Format32bppArgb);
+        using var bitmap = new Bitmap(width: width, height: height, format: PixelFormat.Format32bppArgb);
         BitmapData bitmapData = bitmap.LockBits(
             rect: new Rectangle(x: 0, y: 0, width: width, height: height),
             flags: ImageLockMode.WriteOnly,
@@ -285,7 +284,7 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
             int sourceRowPitch = mappedResource.RowPitch;
             int destRowPitch = bitmapData.Stride;
 
-            for (int row = 0; row < height; row++)
+            for (var row = 0; row < height; row++)
             {
                 Buffer.MemoryCopy(
                     source: (void*)(sourcePtr + row * sourceRowPitch),
@@ -299,7 +298,7 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
             bitmap.UnlockBits(bitmapdata: bitmapData);
         }
 
-        using MemoryStream memoryStream = new MemoryStream();
+        using var memoryStream = new MemoryStream();
         bitmap.Save(stream: memoryStream, format: ImageFormat.Png);
         return memoryStream.ToArray();
     }

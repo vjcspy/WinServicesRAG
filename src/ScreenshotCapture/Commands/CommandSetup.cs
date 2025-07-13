@@ -45,14 +45,20 @@ public static class CommandSetup
         var cliCommand = new Command(name: "cli", description: "Run in CLI mode for testing");
 
         // CLI options
+        var actionOption = new Option<string>(
+            name: "--action",
+            description: "Action to perform",
+            getDefaultValue: () => "screenshot"
+        ).FromAmong("screenshot", "poll");
+
         var outputOption = new Option<string>(
             name: "--output",
             description: "Output file path for the screenshot (PNG format)",
-            getDefaultValue: () => Path.Combine(path1: Environment.GetFolderPath(folder: Environment.SpecialFolder.Desktop),
-                path2: $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss}.png"));
+            getDefaultValue: () => Path.Combine(@"D:\Documents\Temporary\WinServicesRAG\screenshots"));
 
-        var providerOption = new Option<string?>(
+        var providerOption = new Option<string>(
             name: "--provider",
+            getDefaultValue: () => "DirectX",
             description: "Force specific screenshot provider");
 
         var statusOption = new Option<bool>(
@@ -67,13 +73,15 @@ public static class CommandSetup
         cliCommand.AddOption(option: providerOption);
         cliCommand.AddOption(option: statusOption);
         cliCommand.AddOption(option: verboseOption);
+        cliCommand.AddOption(option: actionOption);
 
         // Set handler
         cliCommand.SetHandler(handle: CliHandler.HandleCliMode,
-            symbol1: outputOption,
-            symbol2: providerOption,
-            symbol3: statusOption,
-            symbol4: verboseOption);
+            symbol1: actionOption,
+            symbol2: outputOption,
+            symbol3: providerOption,
+            symbol4: statusOption,
+            symbol5: verboseOption);
 
         return cliCommand;
     }

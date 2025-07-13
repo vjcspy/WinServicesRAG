@@ -7,7 +7,7 @@ namespace ScreenshotCapture.Handlers;
 
 public static class CliHandler
 {
-    public static async Task HandleCliMode(string output, string? provider, bool status, bool verbose)
+    public static async Task HandleCliMode(string action, string output, string provider, bool status, bool verbose)
     {
         try
         {
@@ -30,8 +30,19 @@ public static class CliHandler
                 return;
             }
 
-            // Take screenshot
-            await TakeScreenshot(logger: logger, screenshotManager: screenshotManager, output: output, provider: provider);
+            switch (action)
+            {
+                case "screenshot":
+                    await TakeScreenshot(logger: logger, screenshotManager: screenshotManager, output: output, provider: provider);
+                    break;
+                case "poll":
+                    logger.LogInformation(message: "Started polling for screenshots...");
+                    break;
+                default:
+                    logger.LogInformation(message: "Invalid action specified. Use 'screenshot' or 'poll'.");
+                    break;
+            }
+
         }
         catch (Exception ex)
         {
@@ -63,19 +74,22 @@ public static class CliHandler
 
     private static async Task TakeScreenshot(ILogger<Program> logger, IScreenshotManager screenshotManager, string output, string? provider)
     {
-        logger.LogInformation(message: "Taking screenshot with output: {Output}", output);
+        logger.LogInformation(message: "Taking screenshot with output directory: {Output}", output);
 
         ScreenshotResult screenshotResult;
+        string actualProvider;
 
         if (!string.IsNullOrEmpty(value: provider))
         {
             logger.LogInformation(message: "Using forced provider: {Provider}", provider);
             screenshotResult = await screenshotManager.TakeScreenshotAsync(providerName: provider);
+            actualProvider = provider;
         }
         else
         {
             logger.LogInformation(message: "Using automatic provider selection");
             screenshotResult = await screenshotManager.TakeScreenshotAsync();
+            actualProvider = screenshotResult.ProviderUsed ?? "unknown";
         }
 
         if (!screenshotResult.Success || screenshotResult.ImageData == null || screenshotResult.ImageData.Length == 0)
@@ -86,17 +100,21 @@ public static class CliHandler
         }
 
         // Ensure output directory exists
-        string? outputDir = Path.GetDirectoryName(path: output);
-        if (!string.IsNullOrEmpty(value: outputDir) && !Directory.Exists(path: outputDir))
+        if (!Directory.Exists(path: output))
         {
-            Directory.CreateDirectory(path: outputDir);
-            logger.LogInformation(message: "Created output directory: {OutputDir}", outputDir);
+            Directory.CreateDirectory(path: output);
+            logger.LogInformation(message: "Created output directory: {OutputDir}", output);
         }
 
-        // Save screenshot
-        await File.WriteAllBytesAsync(path: output, bytes: screenshotResult.ImageData);
+        // Generate filename with provider and datetime
+        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        string filename = $"{actualProvider}_{timestamp}.png";
+        string fullPath = Path.Combine(output, filename);
 
-        logger.LogInformation(message: "Screenshot saved successfully: {Output}", output);
+        // Save screenshot
+        await File.WriteAllBytesAsync(path: fullPath, bytes: screenshotResult.ImageData);
+
+        logger.LogInformation(message: "Screenshot saved successfully: {Output}", fullPath);
         logger.LogInformation(message: "File size: {Size:N0} bytes", screenshotResult.ImageData.Length);
 
         // Success exit code
