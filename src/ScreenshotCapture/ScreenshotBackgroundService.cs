@@ -2,6 +2,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WinServicesRAG.Core.Screenshot;
+using WinServicesRAG.Core.Processing;
+using WinServicesRAG.Core.Services;
 
 namespace ScreenshotCapture;
 
@@ -11,16 +13,22 @@ namespace ScreenshotCapture;
 public class ScreenshotBackgroundService : BackgroundService
 {
     private readonly ILogger<ScreenshotBackgroundService> _logger;
-    private readonly ScreenshotManager _screenshotManager;
+    private readonly IScreenshotManager _screenshotManager;
+    private readonly IJobProcessingEngine? _jobProcessingEngine;
+    private readonly IApiClient _apiClient;
     private readonly ScreenshotServiceConfig _config;
 
     public ScreenshotBackgroundService(
         ILogger<ScreenshotBackgroundService> logger,
-        ScreenshotManager screenshotManager,
-        IOptions<ScreenshotServiceConfig> config)
+        IScreenshotManager screenshotManager,
+        IApiClient apiClient,
+        IOptions<ScreenshotServiceConfig> config,
+        IJobProcessingEngine? jobProcessingEngine = null)
     {
         _logger = logger;
         _screenshotManager = screenshotManager;
+        _apiClient = apiClient;
+        _jobProcessingEngine = jobProcessingEngine;
         _config = config.Value;
     }
 
@@ -34,7 +42,7 @@ public class ScreenshotBackgroundService : BackgroundService
         {
             try
             {
-                await ProcessScreenshotJobs();
+                await ProcessScreenshotJobs(stoppingToken);
                 await Task.Delay(TimeSpan.FromSeconds(_config.PollIntervalSeconds), stoppingToken);
             }
             catch (OperationCanceledException)
@@ -52,7 +60,7 @@ public class ScreenshotBackgroundService : BackgroundService
         _logger.LogInformation("Screenshot Background Service stopped");
     }
 
-    private async Task ProcessScreenshotJobs()
+    private async Task ProcessScreenshotJobs(CancellationToken stoppingToken)
     {
         var jobsDir = Path.Combine(_config.WorkDirectory, "jobs");
         var screenshotsDir = Path.Combine(_config.WorkDirectory, "screenshots");
@@ -83,12 +91,12 @@ public class ScreenshotBackgroundService : BackgroundService
                 _logger.LogInformation("Taking screenshot for job: {JobId}", jobId);
 
                 // Take screenshot
-                var screenshotData = _screenshotManager.TakeScreenshot();
+                var screenshotResult = await _screenshotManager.TakeScreenshotAsync(stoppingToken);
 
-                if (screenshotData != null && screenshotData.Length > 0)
+                if (screenshotResult.Success && screenshotResult.ImageData != null && screenshotResult.ImageData.Length > 0)
                 {
                     // Save screenshot
-                    await File.WriteAllBytesAsync(outputFile, screenshotData);
+                    await File.WriteAllBytesAsync(outputFile, screenshotResult.ImageData);
 
                     // Create result file
                     var resultFile = Path.Combine(resultsDir, $"{jobId}.result");
@@ -97,11 +105,11 @@ public class ScreenshotBackgroundService : BackgroundService
     ""job_id"": ""{jobId}"",
     ""status"": ""SUCCESS"",
     ""screenshot_path"": ""{outputFile}"",
-    ""file_size"": {screenshotData.Length},
+    ""file_size"": {screenshotResult.ImageData.Length},
     ""timestamp"": ""{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}""
 }}");
 
-                    _logger.LogInformation("Screenshot completed: {OutputFile} ({Size:N0} bytes)", outputFile, screenshotData.Length);
+                    _logger.LogInformation("Screenshot completed: {OutputFile} ({Size:N0} bytes)", outputFile, screenshotResult.ImageData.Length);
                 }
                 else
                 {
@@ -111,11 +119,11 @@ public class ScreenshotBackgroundService : BackgroundService
                     await File.WriteAllTextAsync(resultFile, $@"{{
     ""job_id"": ""{jobId}"",
     ""status"": ""ERROR"",
-    ""error_message"": ""Failed to capture screenshot - all providers failed"",
+    ""error_message"": ""{screenshotResult.ErrorMessage ?? "Failed to capture screenshot - all providers failed"}"",
     ""timestamp"": ""{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}""
 }}");
 
-                    _logger.LogWarning("Screenshot failed for job: {JobId}", jobId);
+                    _logger.LogWarning("Screenshot failed for job: {JobId}, Error: {Error}", jobId, screenshotResult.ErrorMessage);
                 }
 
                 // Remove processed job file
