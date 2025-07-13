@@ -14,7 +14,7 @@ public class JobProcessingResult
 {
     public string JobName { get; set; } = string.Empty;
     public bool Success { get; set; }
-    public string? ErrorMessage { get; set; }
+    public string? Message { get; set; }
     public string? ImageName { get; set; }
     public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;
 }
@@ -59,20 +59,22 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
     private readonly CompositeDisposable _disposables;
     private readonly ILogger _logger;
     private readonly Subject<Exception> _processingErrors;
+    private readonly object _processingLock = new object();
     private readonly Subject<JobProcessingResult> _processingResults;
     private bool _disposed;
+    private bool _isProcessing;
     private IDisposable? _pollingSubscription;
 
     protected JobProcessingEngineBase(IApiClient apiClient, ILogger logger)
     {
-        _apiClient = apiClient ?? throw new ArgumentNullException(paramName: nameof(apiClient));
-        _logger = logger ?? throw new ArgumentNullException(paramName: nameof(logger));
+        _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _disposables = new CompositeDisposable();
         _processingResults = new Subject<JobProcessingResult>();
         _processingErrors = new Subject<Exception>();
 
-        _disposables.Add(item: _processingResults);
-        _disposables.Add(item: _processingErrors);
+        _disposables.Add(_processingResults);
+        _disposables.Add(_processingErrors);
     }
 
     /// <summary>
@@ -82,7 +84,7 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
     {
         get
         {
-            return TimeSpan.FromSeconds(seconds: 5);
+            return TimeSpan.FromSeconds(5);
         }
     }
 
@@ -111,63 +113,85 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
     public virtual void Start(CancellationToken cancellationToken = default(CancellationToken))
     {
         if (_disposed)
-            throw new ObjectDisposedException(objectName: nameof(JobProcessingEngineBase));
+            throw new ObjectDisposedException(nameof(JobProcessingEngineBase));
 
         if (IsRunning)
         {
-            _logger.LogWarning(message: "Job processing engine is already running");
+            _logger.LogWarning("Job processing engine is already running");
             return;
         }
 
-        _logger.LogInformation(message: "Starting job processing engine with polling interval {PollingInterval}", PollingInterval);
+        _logger.LogInformation("Starting job processing engine with polling interval {PollingInterval}", PollingInterval);
 
         // Create the main processing stream using Rx.NET
         _pollingSubscription = Observable
-            .Interval(period: PollingInterval)
+            .Interval(PollingInterval)
             .StartWith(0) // Start immediately
-            .SelectMany(selector: _ => GetJobFromApi(cancellationToken: cancellationToken))
-            .Where(predicate: job => job != null)
-            .SelectMany(selector: job => ProcessJobWithErrorHandling(job: job!, cancellationToken: cancellationToken))
+            .Where(predicate: _ =>
+            {
+                lock (_processingLock)
+                {
+                    return !_isProcessing;
+                }
+            })
+            .SelectMany(selector: _ =>
+            {
+                lock (_processingLock)
+                {
+                    _isProcessing = true;
+                }
+
+                return Observable.FromAsync(functionAsync: () => GetJobFromApi(cancellationToken))
+                    .Where(predicate: job => job != null)
+                    .SelectMany(selector: job => ProcessJobWithErrorHandling(job!, cancellationToken))
+                    .Finally(finallyAction: () =>
+                    {
+                        lock (_processingLock)
+                        {
+                            _isProcessing = false;
+                        }
+                    });
+            })
             .Subscribe(
                 onNext: result =>
                 {
-                    _logger.LogDebug(message: "Job {JobId} processing completed: {Success}", result.JobName, result.Success);
-                    _processingResults.OnNext(value: result);
+                    _logger.LogDebug("Job {JobName} processing completed: {Success}", result.JobName, result.Success);
+                    _processingResults.OnNext(result);
                 },
                 onError: error =>
                 {
-                    _logger.LogError(exception: error, message: "Critical error in job processing stream");
-                    _processingErrors.OnNext(value: error);
+                    _logger.LogError(error, "Critical error in job processing stream");
+                    _processingErrors.OnNext(error);
                 },
                 onCompleted: () =>
                 {
-                    _logger.LogInformation(message: "Job processing stream completed");
+                    _logger.LogInformation("Job processing stream completed");
                 });
 
-        _disposables.Add(item: _pollingSubscription);
-        _logger.LogInformation(message: "Job processing engine started successfully");
+        _disposables.Add(_pollingSubscription);
+        _logger.LogInformation("Job processing engine started successfully");
     }
 
     public virtual void Stop()
     {
         if (!IsRunning)
         {
-            _logger.LogWarning(message: "Job processing engine is not running");
+            _logger.LogWarning("Job processing engine is not running");
             return;
         }
 
-        _logger.LogInformation(message: "Stopping job processing engine");
+        _logger.LogInformation("Stopping job processing engine");
 
         _pollingSubscription?.Dispose();
         _pollingSubscription = null;
 
-        _logger.LogInformation(message: "Job processing engine stopped");
+        _logger.LogInformation("Job processing engine stopped");
     }
 
     public void Dispose()
     {
-        Dispose(disposing: true);
-        GC.SuppressFinalize(obj: this);
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -182,52 +206,52 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
     {
         try
         {
-            JobModel? job = await _apiClient.GetJobAsync(jobName: CommonValue.GetJobName(), cancellationToken: cancellationToken);
+            JobModel? job = await _apiClient.GetJobAsync(CommonValue.GetJobName(), cancellationToken);
 
             if (job != null)
             {
-                _logger.LogDebug(message: "Retrieved job with status {Status}", job.Status);
+                _logger.LogDebug("Retrieved job with status {Status}", job.Status);
             }
 
             return job;
         }
         catch (OperationCanceledException)
         {
-            _logger.LogDebug(message: "Job polling was cancelled");
+            _logger.LogDebug("Job polling was cancelled");
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogError(exception: ex, message: "Failed to retrieve jobs from API");
+            _logger.LogError(ex, "Failed to retrieve jobs from API");
             return null;
         }
     }
 
     private IObservable<JobProcessingResult> ProcessJobWithErrorHandling(JobModel job, CancellationToken cancellationToken)
     {
-        return Observable.FromAsync(functionAsync: () => ProcessJobAsync(job: job, cancellationToken: cancellationToken))
-            .Retry(retryCount: 3) // Retry up to 3 times on failure
+        return Observable.FromAsync(functionAsync: () => ProcessJobAsync(job, cancellationToken))
+            .Retry(2) // Retry up to 2 times on failure
             .Catch<JobProcessingResult, Exception>(handler: ex =>
             {
-                _logger.LogError(exception: ex, message: "Failed to process job {JobId} after retries", job.Name);
+                _logger.LogError(ex, "Failed to process job {JobId} after retries", job.Name);
 
                 // Update job status to ERROR via API
                 return Observable.FromAsync(functionAsync: async () =>
                 {
-                    await _apiClient.UpdateJobStatusAsync(jobName: job.Name, status: JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
+                    await _apiClient.UpdateJobStatusAsync(job.Name, JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
 
                     return new JobProcessingResult
                     {
                         JobName = job.Name,
                         Success = false,
-                        ErrorMessage = ex.Message
+                        Message = ex.Message
                     };
                 });
             })
             .Finally(finallyAction: () =>
             {
                 // Cleanup resources if needed
-                _logger.LogDebug(message: "Completed processing job {JobId}", job.Name);
+                // _logger.LogDebug("Completed processing job {JobName}", job.Name);
             });
     }
 

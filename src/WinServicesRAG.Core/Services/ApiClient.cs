@@ -22,9 +22,9 @@ public sealed class ApiClient : IApiClient, IDisposable
 
     public ApiClient(HttpClient httpClient, ILogger<ApiClient> logger, IOptions<ApiClientOptions> options)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(paramName: nameof(httpClient));
-        _logger = logger ?? throw new ArgumentNullException(paramName: nameof(logger));
-        _options = options.Value ?? throw new ArgumentNullException(paramName: nameof(options));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
 
         ConfigureHttpClient();
         _jsonOptions = new JsonSerializerOptions
@@ -37,24 +37,24 @@ public sealed class ApiClient : IApiClient, IDisposable
 
     public async Task<JobModel?> GetJobAsync(string jobName, CancellationToken cancellationToken = default(CancellationToken))
     {
-        if (string.IsNullOrEmpty(value: jobName))
-            throw new ArgumentException(message: "Job ID cannot be null or empty", paramName: nameof(jobName));
+        if (string.IsNullOrEmpty(jobName))
+            throw new ArgumentException("Job ID cannot be null or empty", nameof(jobName));
 
         try
         {
-            _logger.LogDebug(message: "Getting job {JobId}", jobName);
+            _logger.LogDebug("Getting job {JobId}", jobName);
 
             JobModel? response = await ExecuteWithRetryAsync(operation: async () =>
             {
-                HttpResponseMessage httpResponse = await _httpClient.GetAsync(requestUri: $"/{CommonValue.JOB_URL_PATH}/{jobName}", cancellationToken: cancellationToken);
-                return await ProcessHttpResponseAsync<JobModel>(response: httpResponse);
-            }, cancellationToken: cancellationToken);
+                HttpResponseMessage httpResponse = await _httpClient.GetAsync($"/{CommonValue.JOB_URL_PATH}/{jobName}", cancellationToken);
+                return await ProcessHttpResponseAsync<JobModel>(httpResponse);
+            }, cancellationToken);
 
             return response;
         }
         catch (Exception ex)
         {
-            _logger.LogError(exception: ex, message: "Failed to get job {JobId}", jobName);
+            _logger.LogError(ex, "Failed to get job {JobId}", jobName);
             return null;
         }
     }
@@ -106,56 +106,54 @@ public sealed class ApiClient : IApiClient, IDisposable
     public async Task<ImageUploadResponse> UploadImageAsync(byte[] imageData, string fileName, string contentType = "image/png", CancellationToken cancellationToken = default(CancellationToken))
     {
         if (imageData == null || imageData.Length == 0)
-            throw new ArgumentException(message: "Image data cannot be null or empty", paramName: nameof(imageData));
+            throw new ArgumentException("Image data cannot be null or empty", nameof(imageData));
 
-        if (string.IsNullOrEmpty(value: fileName))
-            throw new ArgumentException(message: "File name cannot be null or empty", paramName: nameof(fileName));
+        if (string.IsNullOrEmpty(fileName))
+            throw new ArgumentException("File name cannot be null or empty", nameof(fileName));
 
         if (imageData.Length > _options.MaxUploadSizeBytes)
-            throw new ArgumentException(message: $"Image size ({imageData.Length} bytes) exceeds maximum allowed size ({_options.MaxUploadSizeBytes} bytes)", paramName: nameof(imageData));
+            throw new ArgumentException($"Image size ({imageData.Length} bytes) exceeds maximum allowed size ({_options.MaxUploadSizeBytes} bytes)", nameof(imageData));
 
         try
         {
-            _logger.LogDebug(message: "Uploading image {FileName} ({Size} bytes)", fileName, imageData.Length);
+            _logger.LogDebug("Uploading image {FileName} ({Size} bytes)", fileName, imageData.Length);
 
-            var response = await ExecuteWithRetryAsync(operation: async () =>
+            ImageUploadResponse? response = await ExecuteWithRetryAsync(operation: async () =>
             {
                 using var form = new MultipartFormDataContent();
-                using var imageContent = new ByteArrayContent(content: imageData);
+                using var imageContent = new ByteArrayContent(imageData);
 
-                imageContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType: contentType);
-                form.Add(content: imageContent, name: "file", fileName: fileName);
+                imageContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+                form.Add(imageContent, "file", fileName);
 
-                HttpResponseMessage httpResponse = await _httpClient.PostAsync(requestUri: "/api/upload/image", content: form, cancellationToken: cancellationToken);
-                return await ProcessHttpResponseAsync<ApiResponse<ImageUploadResponse>>(response: httpResponse);
-            }, cancellationToken: cancellationToken);
+                HttpResponseMessage httpResponse = await _httpClient.PostAsync("/upload/image", form, cancellationToken);
+                return await ProcessHttpResponseAsync<ImageUploadResponse>(httpResponse);
+            }, cancellationToken);
 
-            if (response?.Success == true && response.Data != null)
-            {
-                _logger.LogDebug(message: "Successfully uploaded image {FileName}", fileName);
-                return response.Data;
-            }
+            if (response == null) throw new InvalidOperationException("Failed to upload image: No response received");
 
-            throw new InvalidOperationException(message: $"Failed to upload image: {response?.Error ?? "Unknown error"}");
+            _logger.LogDebug("Successfully uploaded image {FileName}", fileName);
+            return response;
+
         }
         catch (Exception ex)
         {
-            _logger.LogError(exception: ex, message: "Failed to upload image {FileName}", fileName);
+            _logger.LogError(ex, "Failed to upload image {FileName}", fileName);
             throw;
         }
     }
 
     public async Task<bool> UpdateJobStatusAsync(string jobName, string status, string? imageName = null, string? errorMessage = null, Dictionary<string, object>? data = null, CancellationToken cancellationToken = default(CancellationToken))
     {
-        if (string.IsNullOrEmpty(value: jobName))
-            throw new ArgumentException(message: "Job ID cannot be null or empty", paramName: nameof(jobName));
+        if (string.IsNullOrEmpty(jobName))
+            throw new ArgumentException("Job Name cannot be null or empty", nameof(jobName));
 
-        if (string.IsNullOrEmpty(value: status))
-            throw new ArgumentException(message: "Status cannot be null or empty", paramName: nameof(status));
+        if (string.IsNullOrEmpty(status))
+            throw new ArgumentException("Status cannot be null or empty", nameof(status));
 
         try
         {
-            _logger.LogDebug(message: "Updating job {JobName} status to {Status}", jobName, status);
+            _logger.LogDebug("Updating job {JobName} status to {Status}", jobName, status);
 
             var updateRequest = new UpdateJobStatusRequest
             {
@@ -164,105 +162,47 @@ public sealed class ApiClient : IApiClient, IDisposable
                 Data = data
             };
 
-            var response = await ExecuteWithRetryAsync(operation: async () =>
+            JobModel? response = await ExecuteWithRetryAsync(operation: async () =>
             {
-                string json = JsonSerializer.Serialize(value: updateRequest, options: _jsonOptions);
-                using var content = new StringContent(content: json, encoding: Encoding.UTF8, mediaType: "application/json");
+                string json = JsonSerializer.Serialize(updateRequest, _jsonOptions);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                HttpResponseMessage httpResponse = await _httpClient.PatchAsync(requestUri: $"/image-question-jobs/{jobName}", content: content, cancellationToken: cancellationToken);
-                return await ProcessHttpResponseAsync<ApiResponse<object>>(response: httpResponse);
-            }, cancellationToken: cancellationToken);
+                HttpResponseMessage httpResponse = await _httpClient.PatchAsync($"/{CommonValue.JOB_URL_PATH}/{jobName}", content, cancellationToken);
+                return await ProcessHttpResponseAsync<JobModel>(httpResponse);
+            }, cancellationToken);
 
-            if (response?.Success == true)
+            if (response != null)
             {
-                _logger.LogDebug(message: "Successfully updated job {JobName} status to {Status}", jobName, status);
+                _logger.LogDebug("Successfully updated job {JobName} status to {Status}", jobName, status);
                 return true;
             }
 
-            _logger.LogWarning(message: "Failed to update job {JobName} status: {Error}", jobName, response?.Error ?? "Unknown error");
+            _logger.LogWarning("Failed to update job {JobName}", jobName);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(exception: ex, message: "Failed to update job {JobName} status to {Status}", jobName, status);
-            return false;
-        }
-    }
-
-    public async Task<bool> UploadImageAndUpdateJobAsync(string jobId, byte[] imageData, string fileName, CancellationToken cancellationToken = default(CancellationToken))
-    {
-        try
-        {
-            _logger.LogDebug(message: "Uploading image and updating job {JobId}", jobId);
-
-            // Upload image first
-            ImageUploadResponse uploadResponse = await UploadImageAsync(imageData: imageData, fileName: fileName, contentType: "image/png", cancellationToken: cancellationToken);
-
-            // Update job status with uploaded image name
-            bool updateSuccess = await UpdateJobStatusAsync(jobName: jobId, status: JobStatus.Open, imageName: uploadResponse.FileName, cancellationToken: cancellationToken);
-
-            if (updateSuccess)
-            {
-                _logger.LogInformation(message: "Successfully uploaded image and updated job {JobId}", jobId);
-                return true;
-            }
-
-            _logger.LogWarning(message: "Image uploaded but failed to update job {JobId} status", jobId);
-            return false;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(exception: ex, message: "Failed to upload image and update job {JobId}", jobId);
-
-            // Try to update job status to error
-            try
-            {
-                await UpdateJobStatusAsync(jobName: jobId, status: JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
-            }
-            catch (Exception updateEx)
-            {
-                _logger.LogError(exception: updateEx, message: "Failed to update job {JobId} status to error after upload failure", jobId);
-            }
-
-            return false;
-        }
-    }
-
-    public async Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default(CancellationToken))
-    {
-        try
-        {
-            _logger.LogDebug(message: "Performing API health check");
-
-            HttpResponseMessage response = await _httpClient.GetAsync(requestUri: "/api/health", cancellationToken: cancellationToken);
-            bool isHealthy = response.IsSuccessStatusCode;
-
-            _logger.LogDebug(message: "API health check result: {IsHealthy}", isHealthy);
-            return isHealthy;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(exception: ex, message: "API health check failed");
+            _logger.LogError(ex, "Failed to update job {JobName} status to {Status}", jobName, status);
             return false;
         }
     }
 
     public void Dispose()
     {
-        Dispose(disposing: true);
-        GC.SuppressFinalize(obj: this);
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     private void ConfigureHttpClient()
     {
-        _httpClient.BaseAddress = new Uri(uriString: _options.BaseUrl);
-        _httpClient.Timeout = TimeSpan.FromSeconds(seconds: _options.TimeoutSeconds);
+        _httpClient.BaseAddress = new Uri(_options.BaseUrl);
+        _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         _httpClient.DefaultRequestHeaders.Clear();
-        _httpClient.DefaultRequestHeaders.Add(name: "User-Agent", value: _options.UserAgent);
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", _options.UserAgent);
 
-        if (!string.IsNullOrEmpty(value: _options.ApiKey))
+        if (!string.IsNullOrEmpty(_options.ApiKey))
         {
-            _httpClient.DefaultRequestHeaders.Add(name: "Authorization", value: $"Bearer {_options.ApiKey}");
+            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_options.ApiKey}");
         }
     }
 
@@ -279,18 +219,18 @@ public sealed class ApiClient : IApiClient, IDisposable
             catch (HttpRequestException ex) when (attempt < _options.RetryAttempts)
             {
                 lastException = ex;
-                _logger.LogWarning(exception: ex, message: "HTTP request failed on attempt {Attempt}/{MaxAttempts}, retrying in {DelayMs}ms",
+                _logger.LogWarning(ex, "HTTP request failed on attempt {Attempt}/{MaxAttempts}, retrying in {DelayMs}ms",
                     attempt, _options.RetryAttempts, _options.RetryDelayMs);
 
-                await Task.Delay(millisecondsDelay: _options.RetryDelayMs, cancellationToken: cancellationToken);
+                await Task.Delay(_options.RetryDelayMs, cancellationToken);
             }
             catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException && attempt < _options.RetryAttempts)
             {
                 lastException = ex;
-                _logger.LogWarning(exception: ex, message: "Request timed out on attempt {Attempt}/{MaxAttempts}, retrying in {DelayMs}ms",
+                _logger.LogWarning(ex, "Request timed out on attempt {Attempt}/{MaxAttempts}, retrying in {DelayMs}ms",
                     attempt, _options.RetryAttempts, _options.RetryDelayMs);
 
-                await Task.Delay(millisecondsDelay: _options.RetryDelayMs, cancellationToken: cancellationToken);
+                await Task.Delay(_options.RetryDelayMs, cancellationToken);
             }
         }
 
@@ -306,24 +246,24 @@ public sealed class ApiClient : IApiClient, IDisposable
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning(message: "HTTP request failed with status {StatusCode}: {Content}", response.StatusCode, content);
+            _logger.LogWarning("HTTP request failed with status {StatusCode}: {Content}", response.StatusCode, content);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
                 return null;
 
-            throw new HttpRequestException(message: $"HTTP {response.StatusCode}: {content}");
+            throw new HttpRequestException($"HTTP {response.StatusCode}: {content}");
         }
 
-        if (string.IsNullOrEmpty(value: content))
+        if (string.IsNullOrEmpty(content))
             return null;
 
         try
         {
-            return JsonSerializer.Deserialize<T>(json: content, options: _jsonOptions);
+            return JsonSerializer.Deserialize<T>(content, _jsonOptions);
         }
         catch (JsonException ex)
         {
-            _logger.LogError(exception: ex, message: "Failed to deserialize response: {Content}", content);
+            _logger.LogError(ex, "Failed to deserialize response: {Content}", content);
             throw;
         }
     }

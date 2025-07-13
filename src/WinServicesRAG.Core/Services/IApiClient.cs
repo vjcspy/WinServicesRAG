@@ -36,21 +36,4 @@ public interface IApiClient
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if update was successful</returns>
     Task<bool> UpdateJobStatusAsync(string jobName, string status, string? imageName = null, string? errorMessage = null, Dictionary<string, object>? data = null, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Uploads image and updates job status in a single operation
-    /// </summary>
-    /// <param name="jobId">Job identifier</param>
-    /// <param name="imageData">Image data</param>
-    /// <param name="fileName">File name</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>True if both operations were successful</returns>
-    Task<bool> UploadImageAndUpdateJobAsync(string jobId, byte[] imageData, string fileName, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Checks API server health and connectivity
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>True if server is healthy and accessible</returns>
-    Task<bool> HealthCheckAsync(CancellationToken cancellationToken = default);
 }

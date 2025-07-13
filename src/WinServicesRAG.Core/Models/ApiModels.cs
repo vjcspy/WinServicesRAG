@@ -39,36 +39,10 @@ public class UpdateJobStatusRequest
     public Dictionary<string, object>? Data { get; set; }
 }
 /// <summary>
-///     Response model for API operations
-/// </summary>
-public class ApiResponse<T>
-{
-    [JsonPropertyName(name: "success")]
-    public bool Success { get; set; }
-
-    [JsonPropertyName(name: "data")]
-    public T? Data { get; set; }
-
-    [JsonPropertyName(name: "message")]
-    public string? Message { get; set; }
-
-    [JsonPropertyName(name: "error")]
-    public string? Error { get; set; }
-}
-/// <summary>
 ///     Response model for image upload
 /// </summary>
 public class ImageUploadResponse
 {
-    [JsonPropertyName(name: "file_name")]
+    [JsonPropertyName(name: "filename")]
     public string FileName { get; set; } = string.Empty;
-
-    [JsonPropertyName(name: "file_size")]
-    public long FileSize { get; set; }
-
-    [JsonPropertyName(name: "upload_url")]
-    public string? UploadUrl { get; set; }
-
-    [JsonPropertyName(name: "file_id")]
-    public string? FileId { get; set; }
 }

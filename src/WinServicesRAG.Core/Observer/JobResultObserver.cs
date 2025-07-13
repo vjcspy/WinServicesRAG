@@ -7,17 +7,17 @@ public class JobResultObserver(ILogger logger) : IObserver<JobProcessingResult>
 
     public void OnNext(JobProcessingResult result)
     {
-        logger.LogInformation(message: "Job {JobId} processed: Success={Success}, Error={Error}",
-            result.JobName, result.Success, result.ErrorMessage);
+        logger.LogInformation(">>>>>>>>> Job {JobId} processed: Success={Success}, Message={Message}",
+            result.JobName, result.Success, result.Message);
     }
 
     public void OnError(Exception error)
     {
-        logger.LogError(exception: error, message: "Error in job processing results stream");
+        logger.LogError(error, ">>>>>>>>> Error in job processing results stream");
     }
 
     public void OnCompleted()
     {
-        logger.LogInformation(message: "Job processing results stream completed");
+        logger.LogInformation(">>>>>>>>> Job processing results stream completed");
     }
 }

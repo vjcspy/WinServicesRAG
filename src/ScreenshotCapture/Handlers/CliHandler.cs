@@ -1,8 +1,6 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ScreenshotCapture.Constant;
 using Serilog;
 using WinServicesRAG.Core.Helper;
 using WinServicesRAG.Core.Models;
@@ -10,6 +8,7 @@ using WinServicesRAG.Core.Observer;
 using WinServicesRAG.Core.Processing;
 using WinServicesRAG.Core.Screenshot;
 using WinServicesRAG.Core.Services;
+using WinServicesRAG.Core.Value;
 namespace ScreenshotCapture.Handlers;
 
 public static class CliHandler
@@ -18,7 +17,7 @@ public static class CliHandler
     {
         try
         {
-            RuntimeDataHelper.SetData(key: ScreenshotCaptureConstant.RUNTIME_MODE, value: "CLI");
+            RuntimeDataHelper.SetData(key: CommonValue.RUNTIME_MODE_KEY, value: "CLI");
             // Create minimal host for DI
             IHostBuilder hostBuilder = Host.CreateDefaultBuilder()
                 .ConfigureServices(configureDelegate: (context, services) =>
