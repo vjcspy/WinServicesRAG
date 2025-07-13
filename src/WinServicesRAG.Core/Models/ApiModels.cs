@@ -58,8 +58,8 @@ public class UpdateJobStatusRequest
     [JsonPropertyName("error_message")]
     public string? ErrorMessage { get; set; }
 
-    [JsonPropertyName("metadata")]
-    public Dictionary<string, object>? Metadata { get; set; }
+    [JsonPropertyName("data")]
+    public Dictionary<string, object>? Data { get; set; }
 }
 
 /// <summary>

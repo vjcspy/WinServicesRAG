@@ -10,20 +10,10 @@ public interface IApiClient
     /// <summary>
     /// Gets a specific job by ID
     /// </summary>
-    /// <param name="jobId">The job identifier</param>
+    /// <param name="jobName">The job identifier</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The job model if found, null otherwise</returns>
-    Task<JobModel?> GetJobAsync(string jobId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets jobs with specific status and optional filtering
-    /// </summary>
-    /// <param name="status">Job status to filter by</param>
-    /// <param name="jobType">Optional job type filter</param>
-    /// <param name="limit">Maximum number of jobs to return</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>List of matching jobs</returns>
-    Task<List<JobModel>> GetJobsAsync(string status, string? jobType = null, int limit = 100, CancellationToken cancellationToken = default);
+    Task<JobModel?> GetJobAsync(string jobName, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Uploads an image file to the server
@@ -38,14 +28,14 @@ public interface IApiClient
     /// <summary>
     /// Updates job status and related information
     /// </summary>
-    /// <param name="jobId">Job identifier</param>
+    /// <param name="jobName">Job identifier</param>
     /// <param name="status">New status</param>
     /// <param name="imageName">Optional image name if applicable</param>
     /// <param name="errorMessage">Optional error message</param>
-    /// <param name="metadata">Optional additional metadata</param>
+    /// <param name="data">Optional additional metadata</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if update was successful</returns>
-    Task<bool> UpdateJobStatusAsync(string jobId, string status, string? imageName = null, string? errorMessage = null, Dictionary<string, object>? metadata = null, CancellationToken cancellationToken = default);
+    Task<bool> UpdateJobStatusAsync(string jobName, string status, string? imageName = null, string? errorMessage = null, Dictionary<string, object>? data = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Uploads image and updates job status in a single operation

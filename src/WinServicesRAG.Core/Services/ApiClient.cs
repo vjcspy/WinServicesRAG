@@ -23,7 +23,7 @@ public sealed class ApiClient : IApiClient, IDisposable
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(paramName: nameof(httpClient));
         _logger = logger ?? throw new ArgumentNullException(paramName: nameof(logger));
-        _options = options?.Value ?? throw new ArgumentNullException(paramName: nameof(options));
+        _options = options.Value ?? throw new ArgumentNullException(paramName: nameof(options));
 
         ConfigureHttpClient();
         _jsonOptions = new JsonSerializerOptions
@@ -34,33 +34,33 @@ public sealed class ApiClient : IApiClient, IDisposable
         };
     }
 
-    public async Task<JobModel?> GetJobAsync(string jobId, CancellationToken cancellationToken = default(CancellationToken))
+    public async Task<JobModel?> GetJobAsync(string jobName, CancellationToken cancellationToken = default(CancellationToken))
     {
-        if (string.IsNullOrEmpty(value: jobId))
-            throw new ArgumentException(message: "Job ID cannot be null or empty", paramName: nameof(jobId));
+        if (string.IsNullOrEmpty(value: jobName))
+            throw new ArgumentException(message: "Job ID cannot be null or empty", paramName: nameof(jobName));
 
         try
         {
-            _logger.LogDebug(message: "Getting job {JobId}", jobId);
+            _logger.LogDebug(message: "Getting job {JobId}", jobName);
 
             var response = await ExecuteWithRetryAsync(operation: async () =>
             {
-                HttpResponseMessage httpResponse = await _httpClient.GetAsync(requestUri: $"/api/jobs/{jobId}", cancellationToken: cancellationToken);
+                HttpResponseMessage httpResponse = await _httpClient.GetAsync(requestUri: $"/api/jobs/{jobName}", cancellationToken: cancellationToken);
                 return await ProcessHttpResponseAsync<ApiResponse<JobModel>>(response: httpResponse);
             }, cancellationToken: cancellationToken);
 
-            if (response?.Success == true && response.Data != null)
+            if (response is { Success: true, Data: not null })
             {
-                _logger.LogDebug(message: "Successfully retrieved job {JobId} with status {Status}", jobId, response.Data.Status);
+                _logger.LogDebug(message: "Successfully retrieved job {JobId} with status {Status}", jobName, response.Data.Status);
                 return response.Data;
             }
 
-            _logger.LogWarning(message: "Job {JobId} not found or API returned unsuccessful response", jobId);
+            _logger.LogWarning(message: "Job {JobId} not found or API returned unsuccessful response", jobName);
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogError(exception: ex, message: "Failed to get job {JobId}", jobId);
+            _logger.LogError(exception: ex, message: "Failed to get job {JobId}", jobName);
             return null;
         }
     }
@@ -151,24 +151,24 @@ public sealed class ApiClient : IApiClient, IDisposable
         }
     }
 
-    public async Task<bool> UpdateJobStatusAsync(string jobId, string status, string? imageName = null, string? errorMessage = null, Dictionary<string, object>? metadata = null, CancellationToken cancellationToken = default(CancellationToken))
+    public async Task<bool> UpdateJobStatusAsync(string jobName, string status, string? imageName = null, string? errorMessage = null, Dictionary<string, object>? data = null, CancellationToken cancellationToken = default(CancellationToken))
     {
-        if (string.IsNullOrEmpty(value: jobId))
-            throw new ArgumentException(message: "Job ID cannot be null or empty", paramName: nameof(jobId));
+        if (string.IsNullOrEmpty(value: jobName))
+            throw new ArgumentException(message: "Job ID cannot be null or empty", paramName: nameof(jobName));
 
         if (string.IsNullOrEmpty(value: status))
             throw new ArgumentException(message: "Status cannot be null or empty", paramName: nameof(status));
 
         try
         {
-            _logger.LogDebug(message: "Updating job {JobId} status to {Status}", jobId, status);
+            _logger.LogDebug(message: "Updating job {JobId} status to {Status}", jobName, status);
 
             var updateRequest = new UpdateJobStatusRequest
             {
                 Status = status,
                 ImageName = imageName,
                 ErrorMessage = errorMessage,
-                Metadata = metadata
+                Data = data
             };
 
             var response = await ExecuteWithRetryAsync(operation: async () =>
@@ -176,22 +176,22 @@ public sealed class ApiClient : IApiClient, IDisposable
                 string json = JsonSerializer.Serialize(value: updateRequest, options: _jsonOptions);
                 using var content = new StringContent(content: json, encoding: Encoding.UTF8, mediaType: "application/json");
 
-                HttpResponseMessage httpResponse = await _httpClient.PatchAsync(requestUri: $"/api/jobs/{jobId}", content: content, cancellationToken: cancellationToken);
+                HttpResponseMessage httpResponse = await _httpClient.PatchAsync(requestUri: $"/api/jobs/{jobName}", content: content, cancellationToken: cancellationToken);
                 return await ProcessHttpResponseAsync<ApiResponse<object>>(response: httpResponse);
             }, cancellationToken: cancellationToken);
 
             if (response?.Success == true)
             {
-                _logger.LogDebug(message: "Successfully updated job {JobId} status to {Status}", jobId, status);
+                _logger.LogDebug(message: "Successfully updated job {JobId} status to {Status}", jobName, status);
                 return true;
             }
 
-            _logger.LogWarning(message: "Failed to update job {JobId} status: {Error}", jobId, response?.Error ?? "Unknown error");
+            _logger.LogWarning(message: "Failed to update job {JobId} status: {Error}", jobName, response?.Error ?? "Unknown error");
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(exception: ex, message: "Failed to update job {JobId} status to {Status}", jobId, status);
+            _logger.LogError(exception: ex, message: "Failed to update job {JobId} status to {Status}", jobName, status);
             return false;
         }
     }
@@ -206,7 +206,7 @@ public sealed class ApiClient : IApiClient, IDisposable
             ImageUploadResponse uploadResponse = await UploadImageAsync(imageData: imageData, fileName: fileName, contentType: "image/png", cancellationToken: cancellationToken);
 
             // Update job status with uploaded image name
-            bool updateSuccess = await UpdateJobStatusAsync(jobId: jobId, status: JobStatus.TakeScreenshotSuccess, imageName: uploadResponse.FileName, cancellationToken: cancellationToken);
+            bool updateSuccess = await UpdateJobStatusAsync(jobName: jobId, status: JobStatus.TakeScreenshotSuccess, imageName: uploadResponse.FileName, cancellationToken: cancellationToken);
 
             if (updateSuccess)
             {
@@ -224,7 +224,7 @@ public sealed class ApiClient : IApiClient, IDisposable
             // Try to update job status to error
             try
             {
-                await UpdateJobStatusAsync(jobId: jobId, status: JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
+                await UpdateJobStatusAsync(jobName: jobId, status: JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
             }
             catch (Exception updateEx)
             {

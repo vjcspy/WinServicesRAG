@@ -55,7 +55,7 @@ public class ScreenshotJobProcessingEngine : JobProcessingEngineBase
 
                 return new JobProcessingResult
                 {
-                    JobId = job.Id,
+                    JobName = job.Id,
                     Success = false,
                     ErrorMessage = errorMessage
                 };
@@ -76,7 +76,7 @@ public class ScreenshotJobProcessingEngine : JobProcessingEngineBase
 
                 return new JobProcessingResult
                 {
-                    JobId = job.Id,
+                    JobName = job.Id,
                     Success = true,
                     ImageName = fileName
                 };
@@ -85,7 +85,7 @@ public class ScreenshotJobProcessingEngine : JobProcessingEngineBase
 
             return new JobProcessingResult
             {
-                JobId = job.Id,
+                JobName = job.Id,
                 Success = false,
                 ErrorMessage = "Failed to upload screenshot to API server"
             };
@@ -96,7 +96,7 @@ public class ScreenshotJobProcessingEngine : JobProcessingEngineBase
 
             return new JobProcessingResult
             {
-                JobId = job.Id,
+                JobName = job.Id,
                 Success = false,
                 ErrorMessage = ex.Message
             };
@@ -142,7 +142,7 @@ public class GeneralJobProcessingEngine(
 
                 return new JobProcessingResult
                 {
-                    JobId = job.Id,
+                    JobName = job.Id,
                     Success = true, // Not an error, just not our responsibility
                     ErrorMessage = "Screenshot job delegated to ScreenshotCapture service"
                 };
@@ -166,7 +166,7 @@ public class GeneralJobProcessingEngine(
 
             return new JobProcessingResult
             {
-                JobId = job.Id,
+                JobName = job.Id,
                 Success = false,
                 ErrorMessage = ex.Message
             };
@@ -180,8 +180,8 @@ public class GeneralJobProcessingEngine(
         // Simulate system info collection
         await Task.Delay(millisecondsDelay: 1000, cancellationToken: cancellationToken);
 
-        bool success = await _apiClient.UpdateJobStatusAsync(jobId: job.Id, status: JobStatus.Completed,
-            metadata: new Dictionary<string, object>
+        bool success = await _apiClient.UpdateJobStatusAsync(jobName: job.Id, status: JobStatus.Completed,
+            data: new Dictionary<string, object>
             {
                 {
                     "system_info", new
@@ -195,7 +195,7 @@ public class GeneralJobProcessingEngine(
 
         return new JobProcessingResult
         {
-            JobId = job.Id,
+            JobName = job.Id,
             Success = success,
             ErrorMessage = success ? null : "Failed to update job status"
         };
@@ -208,11 +208,11 @@ public class GeneralJobProcessingEngine(
         // Simulate file operation
         await Task.Delay(millisecondsDelay: 500, cancellationToken: cancellationToken);
 
-        bool success = await _apiClient.UpdateJobStatusAsync(jobId: job.Id, status: JobStatus.Completed, cancellationToken: cancellationToken);
+        bool success = await _apiClient.UpdateJobStatusAsync(jobName: job.Id, status: JobStatus.Completed, cancellationToken: cancellationToken);
 
         return new JobProcessingResult
         {
-            JobId = job.Id,
+            JobName = job.Id,
             Success = success,
             ErrorMessage = success ? null : "Failed to update job status"
         };
@@ -225,11 +225,11 @@ public class GeneralJobProcessingEngine(
         // Simulate custom command execution
         await Task.Delay(millisecondsDelay: 2000, cancellationToken: cancellationToken);
 
-        bool success = await _apiClient.UpdateJobStatusAsync(jobId: job.Id, status: JobStatus.Completed, cancellationToken: cancellationToken);
+        bool success = await _apiClient.UpdateJobStatusAsync(jobName: job.Id, status: JobStatus.Completed, cancellationToken: cancellationToken);
 
         return new JobProcessingResult
         {
-            JobId = job.Id,
+            JobName = job.Id,
             Success = success,
             ErrorMessage = success ? null : "Failed to update job status"
         };
@@ -239,13 +239,13 @@ public class GeneralJobProcessingEngine(
     {
         _logger.LogWarning(message: "Processing unknown job type {JobType} for job {JobId}", job.Type, job.Id);
 
-        bool success = await _apiClient.UpdateJobStatusAsync(jobId: job.Id, status: JobStatus.Error,
+        bool success = await _apiClient.UpdateJobStatusAsync(jobName: job.Id, status: JobStatus.Error,
             errorMessage: $"Unknown job type: {job.Type}",
             cancellationToken: cancellationToken);
 
         return new JobProcessingResult
         {
-            JobId = job.Id,
+            JobName = job.Id,
             Success = false,
             ErrorMessage = $"Unknown job type: {job.Type}"
         };

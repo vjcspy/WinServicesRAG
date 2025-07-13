@@ -8,7 +8,7 @@ public class JobResultObserver(ILogger logger) : IObserver<JobProcessingResult>
     public void OnNext(JobProcessingResult result)
     {
         logger.LogInformation(message: "Job {JobId} processed: Success={Success}, Error={Error}",
-            result.JobId, result.Success, result.ErrorMessage);
+            result.JobName, result.Success, result.ErrorMessage);
     }
 
     public void OnError(Exception error)

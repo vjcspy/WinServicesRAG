@@ -21,8 +21,11 @@ public static class CliHandler
                 {
                     services.AddSingleton<IScreenshotManager, ScreenshotManager>();
                     services.AddSingleton<IJobProcessingEngine, GeneralJobProcessingEngine>();
+                    
+                    // THAY ĐỔI: Cách đúng để bind configuration
+                    services.Configure<ApiClientOptions>(context.Configuration.GetSection(ApiClientOptions.SectionName));
                     services.AddSingleton<IApiClient, ApiClient>();
-                    services.AddSingleton<ApiClientOptions>();
+                    services.AddHttpClient<ApiClient>(); // Đăng ký HttpClient cho ApiClient
                 })
                 .UseSerilog();
 

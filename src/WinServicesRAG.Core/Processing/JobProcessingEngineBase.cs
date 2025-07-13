@@ -11,7 +11,7 @@ namespace WinServicesRAG.Core.Processing;
 /// </summary>
 public class JobProcessingResult
 {
-    public string JobId { get; set; } = string.Empty;
+    public string JobName { get; set; } = string.Empty;
     public bool Success { get; set; }
     public string? ErrorMessage { get; set; }
     public string? ImageName { get; set; }
@@ -140,14 +140,13 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
         _pollingSubscription = Observable
             .Interval(period: PollingInterval)
             .StartWith(0) // Start immediately
-            .SelectMany(selector: _ => GetJobsFromApi(cancellationToken: cancellationToken))
-            .Where(predicate: jobs => jobs.Any())              // Only process when there are jobs
-            .SelectMany(selector: jobs => jobs.ToObservable()) // Flatten to individual jobs
-            .SelectMany(selector: job => ProcessJobWithErrorHandling(job: job, cancellationToken: cancellationToken))
+            .SelectMany(selector: _ => GetJobFromApi(cancellationToken: cancellationToken))
+            .Where(predicate: job => job != null)
+            .SelectMany(selector: job => ProcessJobWithErrorHandling(job: job!, cancellationToken: cancellationToken))
             .Subscribe(
                 onNext: result =>
                 {
-                    _logger.LogDebug(message: "Job {JobId} processing completed: {Success}", result.JobId, result.Success);
+                    _logger.LogDebug(message: "Job {JobId} processing completed: {Success}", result.JobName, result.Success);
                     _processingResults.OnNext(value: result);
                 },
                 onError: error =>
@@ -194,32 +193,28 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
     /// <returns>Processing result</returns>
     protected abstract Task<JobProcessingResult> ProcessJobAsync(JobModel job, CancellationToken cancellationToken);
 
-    private async Task<List<JobModel>> GetJobsFromApi(CancellationToken cancellationToken)
+    private async Task<JobModel?> GetJobFromApi(CancellationToken cancellationToken)
     {
         try
         {
-            var jobs = await _apiClient.GetJobsAsync(status: TargetJobStatus, jobType: TargetJobType, limit: 50, cancellationToken: cancellationToken);
+            JobModel? job = await _apiClient.GetJobAsync(jobName: "PBF_EXAM", cancellationToken: cancellationToken);
 
-            if (jobs.Count != 0)
+            if (job != null)
             {
-                _logger.LogDebug(message: "Retrieved {JobCount} jobs with status {Status}", jobs.Count, TargetJobStatus);
+                _logger.LogDebug(message: "Retrieved job with status {Status}", job.Status);
             }
 
-            return jobs;
+            return job;
         }
         catch (OperationCanceledException)
         {
             _logger.LogDebug(message: "Job polling was cancelled");
-            return
-            [
-            ];
+            return null;
         }
         catch (Exception ex)
         {
             _logger.LogError(exception: ex, message: "Failed to retrieve jobs from API");
-            return
-            [
-            ];
+            return null;
         }
     }
 
@@ -234,11 +229,11 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
                 // Update job status to ERROR via API
                 return Observable.FromAsync(functionAsync: async () =>
                 {
-                    await _apiClient.UpdateJobStatusAsync(jobId: job.Id, status: JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
+                    await _apiClient.UpdateJobStatusAsync(jobName: job.Id, status: JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
 
                     return new JobProcessingResult
                     {
-                        JobId = job.Id,
+                        JobName = job.Id,
                         Success = false,
                         ErrorMessage = ex.Message
                     };
