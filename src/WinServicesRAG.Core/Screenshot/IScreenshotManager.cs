@@ -33,6 +33,13 @@ public interface IScreenshotManager : IDisposable
     Task<ScreenshotResult> TakeScreenshotAsync(string providerName, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Takes screenshots using all available providers asynchronously
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of screenshot results from all providers</returns>
+    Task<List<ScreenshotResult>> TakeScreenshotAllProviderAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the status of all available providers
     /// </summary>
     /// <returns>Dictionary of provider names and their availability status</returns>

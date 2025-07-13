@@ -133,6 +133,21 @@ public class ScreenshotManager : IScreenshotManager
             CapturedAt = DateTime.UtcNow
         });
     }
+
+    public async Task<List<ScreenshotResult>> TakeScreenshotAllProviderAsync(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        _logger.LogInformation(message: "Taking screenshots with all providers asynchronously");
+
+        var tasks = _providers.Select(selector: provider =>
+            Task.Run(function: () => TakeScreenshotWithProvider(provider: provider), cancellationToken: cancellationToken)
+        ).ToArray();
+
+        var results = await Task.WhenAll(tasks: tasks);
+
+        _logger.LogInformation(message: "Completed screenshots from {ProviderCount} providers", _providers.Count);
+        return [.. results];
+    }
+
     /// <summary>
     ///     Gets information about all providers and their availability
     /// </summary>
@@ -155,6 +170,61 @@ public class ScreenshotManager : IScreenshotManager
         }
 
         return status;
+    }
+
+    private ScreenshotResult TakeScreenshotWithProvider(IScreenshotProvider provider)
+    {
+        try
+        {
+            _logger.LogDebug(message: "Taking screenshot with provider: {ProviderName}", provider.ProviderName);
+
+            if (!provider.IsAvailable())
+            {
+                _logger.LogDebug(message: "Provider {ProviderName} is not available", provider.ProviderName);
+                return new ScreenshotResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Provider {provider.ProviderName} is not available",
+                    ProviderUsed = provider.ProviderName,
+                    CapturedAt = DateTime.UtcNow
+                };
+            }
+
+            byte[]? screenshot = provider.TakeScreenshot();
+            if (screenshot is { Length: > 0 })
+            {
+                _logger.LogInformation(message: "Successfully captured screenshot using {ProviderName}: {Size} bytes",
+                    provider.ProviderName, screenshot.Length);
+
+                return new ScreenshotResult
+                {
+                    Success = true,
+                    ImageData = screenshot,
+                    ProviderUsed = provider.ProviderName,
+                    CapturedAt = DateTime.UtcNow
+                };
+            }
+
+            _logger.LogWarning(message: "Provider {ProviderName} returned null or empty screenshot", provider.ProviderName);
+            return new ScreenshotResult
+            {
+                Success = false,
+                ErrorMessage = $"Provider {provider.ProviderName} returned null or empty screenshot",
+                ProviderUsed = provider.ProviderName,
+                CapturedAt = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(exception: ex, message: "Provider {ProviderName} failed with exception", provider.ProviderName);
+            return new ScreenshotResult
+            {
+                Success = false,
+                ErrorMessage = $"Provider {provider.ProviderName} failed: {ex.Message}",
+                ProviderUsed = provider.ProviderName,
+                CapturedAt = DateTime.UtcNow
+            };
+        }
     }
 
     private void InitializeProviders()
