@@ -54,6 +54,8 @@ public class ScreenshotJobProcessingEngine(
 
                     if (job.Data?.GetValueOrDefault(CommonValue.GetImageProviderKey(runtimeMode, captureWithProvider)) != null)
                     {
+                        _logger.LogInformation("Capture provider '{CaptureProvider}' is already specified in job data for job {JobName}",
+                            captureWithProvider, job.Name);
                         return new JobProcessingResult
                         {
                             JobName = job.Name,

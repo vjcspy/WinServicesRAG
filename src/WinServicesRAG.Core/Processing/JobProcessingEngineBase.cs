@@ -233,7 +233,7 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
             .Retry(2) // Retry up to 2 times on failure
             .Catch<JobProcessingResult, Exception>(handler: ex =>
             {
-                _logger.LogError(ex, "Failed to process job {JobId} after retries", job.Name);
+                _logger.LogError(ex, "Failed to process job {JobId} after retries", job.Name);;
 
                 // Update job status to ERROR via API
                 return Observable.FromAsync(functionAsync: async () =>
