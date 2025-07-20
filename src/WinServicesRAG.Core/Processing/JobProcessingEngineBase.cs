@@ -143,6 +143,13 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
 
                 return Observable.FromAsync(functionAsync: () => GetJobFromApi(cancellationToken))
                     .Where(predicate: job => job != null)
+                    .Where(predicate: job =>
+                    {
+                        if (job!.Status == JobStatus.AgentScreenCapture) return true;
+
+                        _logger.LogDebug("Job {JobName} is not in the correct status for processing: {Status}", job.Name, job.Status);
+                        return false;
+                    })
                     .SelectMany(selector: job => ProcessJobWithErrorHandling(job!, cancellationToken))
                     .Finally(finallyAction: () =>
                     {
@@ -233,12 +240,12 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
             .Retry(2) // Retry up to 2 times on failure
             .Catch<JobProcessingResult, Exception>(handler: ex =>
             {
-                _logger.LogError(ex, "Failed to process job {JobId} after retries", job.Name);;
+                _logger.LogError(ex, "Failed to process job {JobId} after retries", job.Name);
 
                 // Update job status to ERROR via API
                 return Observable.FromAsync(functionAsync: async () =>
                 {
-                    await _apiClient.UpdateJobStatusAsync(job.Name, JobStatus.Error, errorMessage: ex.Message, cancellationToken: cancellationToken);
+                    await _apiClient.UpdateJobStatusAsync(job.Name, JobStatus.AgentScreenCapture, errorMessage: ex.Message, cancellationToken: cancellationToken);
 
                     return new JobProcessingResult
                     {

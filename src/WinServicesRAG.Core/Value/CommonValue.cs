@@ -13,6 +13,7 @@ public class CommonValue
     private const string IMAGE_PROVIDER_PREFIX = "IMAGE_PROVIDER";
     public const string CAPTURE_MODE = "capture_mode";
     public const string CAPTURE_WITH_PROVIDER = "capture_with_provider";
+    public const string STATUS = "status";
     public static string GetJobName()
     {
         return "PBF_EXAM";
