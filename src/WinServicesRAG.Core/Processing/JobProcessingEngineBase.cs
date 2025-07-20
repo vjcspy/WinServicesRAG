@@ -84,7 +84,7 @@ public abstract class JobProcessingEngineBase : IJobProcessingEngine
     {
         get
         {
-            return TimeSpan.FromSeconds(5);
+            return TimeSpan.FromSeconds(3);
         }
     }
 
