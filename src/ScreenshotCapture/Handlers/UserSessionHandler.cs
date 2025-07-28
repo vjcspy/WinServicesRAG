@@ -85,7 +85,7 @@ public static class UserSessionHandler
             };
 
             // Keep running until cancellation
-            logger.LogInformation("User session mode is running. Press Ctrl+C to stop.");
+            // logger.LogInformation("User session mode is running. Press Ctrl+C to stop.");
             try
             {
                 await Task.Delay(Timeout.Infinite, cts.Token);

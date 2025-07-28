@@ -129,6 +129,12 @@ e:\cs\WinServicesRAG\publish\
 
 ## Usage
 
+### Build 
+```powershell
+ cd src\WatchdogService
+ dotnet publish -c Release --output ..\..\publish\WatchdogService
+```
+
 ### Windows Service Installation
 ```powershell
 # Use ps1

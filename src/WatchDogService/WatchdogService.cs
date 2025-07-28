@@ -13,15 +13,18 @@ public class WatchdogService(
     IOptions<WatchdogServiceConfig> config,
     ISessionManager sessionManager,
     IUserSessionProcessLauncher processLauncher)
-    : BackgroundService
+    : BackgroundService, IDisposable
 {
     private readonly WatchdogServiceConfig _config = config.Value;
 
-    private readonly object _lockObject = new object();
+    private readonly Lock _lockObject = new Lock();
     private readonly Dictionary<int, int> _restartAttempts = new Dictionary<int, int>();
 
     // Track managed processes per session
     private readonly Dictionary<int, ProcessInfo> _userProcesses = new Dictionary<int, ProcessInfo>();
+    
+    // Semaphore to prevent concurrent process launches
+    private readonly SemaphoreSlim _launchSemaphore = new SemaphoreSlim(1, 1);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -241,28 +244,67 @@ public class WatchdogService(
 
     private async Task EnsureScreenshotProcessAsync(int sessionId)
     {
+        await _launchSemaphore.WaitAsync();
         try
         {
-            string executablePath = _config.GetResolvedScreenshotExecutablePath();
-            var arguments = $"user-session --session-id {sessionId}";
-
-            logger.LogInformation("Launching ScreenshotCapture in session {SessionId}: {Path} {Args}",
-                sessionId, executablePath, arguments);
-
-            ProcessInfo processInfo = await processLauncher.LaunchInUserSessionAsync(sessionId, executablePath, arguments);
-
+            bool shouldLaunch = false;
+            
+            // Quick check with minimal lock time
             lock (_lockObject)
             {
-                _userProcesses[sessionId] = processInfo;
-                _restartAttempts[sessionId] = 0; // Reset attempts on successful start
+                if (_userProcesses.TryGetValue(sessionId, out ProcessInfo? existingProcess))
+                {
+                    // Verify the process is still running
+                    if (processLauncher.IsProcessRunning(existingProcess.ProcessId))
+                    {
+                        logger.LogDebug("ScreenshotCapture process {ProcessId} already running for session {SessionId}, skipping launch",
+                            existingProcess.ProcessId, sessionId);
+                        return; // Early exit - process already running
+                    }
+                    else
+                    {
+                        // Process died, remove from tracking
+                        logger.LogWarning("Existing ScreenshotCapture process {ProcessId} for session {SessionId} is no longer running, will create new one",
+                            existingProcess.ProcessId, sessionId);
+                        _userProcesses.Remove(sessionId);
+                        _restartAttempts.Remove(sessionId); // Clean restart attempts too
+                    }
+                }
+                shouldLaunch = true;
             }
 
-            logger.LogInformation("Successfully launched ScreenshotCapture process {ProcessId} in session {SessionId}",
-                processInfo.ProcessId, sessionId);
+            // Launch process outside of lock (only if needed)
+            if (shouldLaunch)
+            {
+                try
+                {
+                    string executablePath = _config.GetResolvedScreenshotExecutablePath();
+                    var arguments = $"user-session --session-id {sessionId}";
+
+                    logger.LogInformation("Launching ScreenshotCapture in session {SessionId}: {Path} {Args}",
+                        sessionId, executablePath, arguments);
+
+                    ProcessInfo processInfo = await processLauncher.LaunchInUserSessionAsync(sessionId, executablePath, arguments);
+
+                    // Store result with minimal lock time
+                    lock (_lockObject)
+                    {
+                        _userProcesses[sessionId] = processInfo;
+                        _restartAttempts[sessionId] = 0; // Reset attempts on successful start
+                    }
+
+                    logger.LogInformation("Successfully launched ScreenshotCapture process {ProcessId} in session {SessionId}",
+                        processInfo.ProcessId, sessionId);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to launch ScreenshotCapture in session {SessionId}", sessionId);
+                }
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            logger.LogError(ex, "Failed to launch ScreenshotCapture in session {SessionId}", sessionId);
+            _launchSemaphore.Release();
         }
     }
 
@@ -312,5 +354,11 @@ public class WatchdogService(
         {
             logger.LogError(ex, "Error during cleanup");
         }
+    }
+
+    public override void Dispose()
+    {
+        _launchSemaphore?.Dispose();
+        base.Dispose();
     }
 }
