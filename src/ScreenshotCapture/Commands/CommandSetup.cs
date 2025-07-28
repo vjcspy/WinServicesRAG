@@ -11,6 +11,7 @@ public static class CommandSetup
         // Add service and CLI commands
         rootCommand.AddCommand(command: CreateServiceCommand());
         rootCommand.AddCommand(command: CreateCliCommand());
+        rootCommand.AddCommand(command: UserSessionCommand.CreateUserSessionCommand());
 
         return rootCommand;
     }
