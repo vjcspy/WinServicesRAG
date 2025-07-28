@@ -160,6 +160,7 @@ public class UserSessionProcessLauncher(ILogger<UserSessionProcessLauncher> logg
 
     public async Task<bool> TerminateProcessAsync(int processId)
     {
+        await Task.Delay(100);
         try
         {
             logger.LogDebug("Terminating process {ProcessId}", processId);
@@ -227,6 +228,7 @@ public class UserSessionProcessLauncher(ILogger<UserSessionProcessLauncher> logg
 
     public async Task<ProcessInfo?> GetProcessInfoAsync(int processId)
     {
+        await Task.Delay(100);
         try
         {
             using var process = System.Diagnostics.Process.GetProcessById(processId);

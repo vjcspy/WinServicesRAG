@@ -376,6 +376,7 @@ public class SessionManager : ISessionManager, IDisposable
     {
         try
         {
+            await Task.Delay(100);
             var userName = GetSessionUserName(sessionId);
             var domainName = GetSessionDomainName(sessionId);
             var state = GetSessionState(sessionId);
