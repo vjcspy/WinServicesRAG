@@ -100,21 +100,6 @@
             }
         },
         {
-            "name": "Debug WorkerService",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/WorkerService/bin/Debug/net9.0/WorkerService.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/WorkerService",
-            "console": "integratedTerminal",
-            "stopAtEntry": false,
-            "internalConsoleOptions": "openOnSessionStart",
-            "env": {
-                "DOTNET_ENVIRONMENT": "Development"
-            }
-        },
-        {
             "name": "Debug WatchdogService",
             "type": "coreclr",
             "request": "launch",

@@ -13,10 +13,9 @@ Of course, here is the detailed plan translated into English in Markdown format.
 
 This project aims to build an extremely stable and tamper-resistant Windows monitoring system. The system consists of three main components:
 
-1. **WorkerService** - Windows Service responsible for API communication and job orchestration
-2. **WatchdogService** - Windows Service that ensures WorkerService is always running  
-3. **ScreenshotCapture** - Console Application that handles screenshot capture in user session
-4. **WinServicesRAG.Core** - Shared library for other servces like `WorkerService`, `ScreenshotCapture` can refer
+1. **ScreenshotCapture** - Unified service/console application that handles both screenshot capture and general API operations
+2. **WatchdogService** - Windows Service that ensures ScreenshotCapture is always running  
+3. **WinServicesRAG.Core** - Shared library for common functionality
 
 ### Architecture Overview
 
@@ -31,69 +30,89 @@ This project aims to build an extremely stable and tamper-resistant Windows moni
                                  └─────────────────┘
                                           ▲
                                           │ HTTP API
+                                          │
                               ┌───────────┼───────────┐
                               │           │           │
                               ▼           ▼           ▼
-                ┌──────────────────┐              ┌─────────────────┐
-                │  WorkerService   │              │ ScreenshotCapture│
-                │  (Session 0)     │              │  (User Session) │
-                │                  │              │                 │
-                │ - API Client     │              │ - API Client    │
-                │ - Job Processing │              │ - Screenshot    │
-                │ - Business Logic │              │ - DirectX API   │
-                │ - Data Storage   │              │ - WinAPI GDI    │
-                │ - Service Host   │              │ - CLI Interface │
-                └──────────────────┘              └─────────────────┘
-                          ▲                                  ▲
-                          │                                  │
-                          │ Monitor & Restart                │ Monitor & Restart
-                          │                                  │
+                ┌──────────────────────────────────────┐
+                │       ScreenshotCapture              │
+                │    (Service & Console Modes)        │
+                │                                      │
+                │ Service Mode:                        │
+                │ - API Client                         │
+                │ - Job Processing                     │
+                │ - Screenshot Capture                 │
+                │ - Business Logic                     │
+                │ - Windows Service Host               │
+                │                                      │
+                │ CLI Mode:                            │
+                │ - Manual Testing                     │
+                │ - Provider Status Check              │
+                │ - Direct Screenshot Testing          │
+                │ - Debugging Interface                │
+                │                                      │
+                │ Screenshot Technologies:             │
+                │ - DirectX Desktop Duplication API    │
+                │ - WinAPI (BitBlt + PrintWindow)     │
+                │ - Windows Graphics Capture API      │
+                └──────────────────────────────────────┘
+                          ▲
+                          │
+                          │ Monitor & Restart
+                          │
                  ┌────────────────────────────────────────────┐
                  │           WatchdogService                  │
                  │           (Session 0)                      │
                  │                                            │
-                 │ ┌─────────────────┐ ┌─────────────────────┐│
-                 │ │ Worker Monitor  │ │Screenshot Monitor   ││
-                 │ │                 │ │                     ││
-                 │ │ - Health Check  │ │ - Process Health    ││
-                 │ │ - Auto Restart  │ │ - Session Detection ││
-                 │ │ - Log Monitor   │ │ - Auto Launch       ││
-                 │ └─────────────────┘ └─────────────────────┘│
+                 │ ┌─────────────────────────────────────────┐│
+                 │ │     ScreenshotCapture Monitor           ││
+                 │ │                                         ││
+                 │ │ - Health Check                          ││
+                 │ │ - Auto Restart                          ││
+                 │ │ - Log Monitor                           ││
+                 │ │ - Session Detection                     ││
+                 │ │ - Service/CLI Mode Management           ││
+                 │ └─────────────────────────────────────────┘│
                  └────────────────────────────────────────────┘
 ```
 
 **Key Design Decisions:**
 
-### Why Independent Dual API Architecture?
+### Unified ScreenshotCapture Architecture
 
-**Technical Requirement - Complete Service Isolation:**
+**Technical Evolution - Simplified Unified Service:**
 
-- **WorkerService (Session 0)**: Handles business logic, data processing, and general API operations but **cannot access desktop graphics**
-- **ScreenshotCapture (User Session)**: Specialized for desktop capture using DirectX/Graphics APIs but runs in user context
-- **Both services are completely independent**: Each has its own API client, job polling, error handling, and communication with API Server
-- **No shared state or communication**: Services operate in parallel without any dependency on each other
+- **ScreenshotCapture (Unified Service)**: Now handles all functionality including business logic, data processing, screenshot capture, and API operations
+- **Dual Operation Modes**: 
+  - **Service Mode**: Runs as Windows Service for production deployment
+  - **CLI Mode**: Interactive command-line interface for testing and debugging
+- **Session Flexibility**: Can run in both Session 0 (as service) and User Session (for desktop access)
+- **Single API Client**: Streamlined architecture with one optimized API client implementation
 
-**This architecture provides:**
-- **Maximum Reliability**: One service failure doesn't affect the other
-- **Session Compatibility**: Each service runs in its optimal environment 
-- **Scalability**: Services can be scaled independently
-- **Simplified Development**: No complex inter-process communication needed
+**This unified architecture provides:**
+- **Simplified Deployment**: Single executable handles all functionality
+- **Flexible Testing**: CLI mode enables easy debugging and manual testing
+- **Reduced Complexity**: No inter-service communication overhead
+- **Enhanced Reliability**: Fewer moving parts means fewer failure points
+- **Easier Maintenance**: Single codebase for all functionality
 
 ### Architecture Principles:
-- **Independent & Simultaneous Operation**: Both WorkerService and ScreenshotCapture work directly with API Server in parallel
-- **Session Separation**: WorkerService runs in Session 0 (system), ScreenshotCapture runs in User Session for desktop access
-- **No Inter-Service Communication**: WorkerService and ScreenshotCapture do NOT communicate with each other directly
-- **Dual API Clients**: Each service has its own HTTP client for independent API communication
-- **WatchdogService Management**: WatchdogService monitors and manages both independent processes
-- **Isolated Responsibilities**: Each component has distinct, non-overlapping responsibilities
-- **High Availability**: Independent operation ensures one service failure doesn't affect the other
+- **Unified Operation**: Single ScreenshotCapture service handles all API communication and processing
+- **Dual Modes**: Service mode for production, CLI mode for development and testing
+- **Session Adaptability**: Intelligent session detection and appropriate operation mode selection
+- **Direct API Integration**: Single optimized HTTP client for all API communication
+- **WatchdogService Management**: WatchdogService monitors and manages the unified ScreenshotCapture process
+- **Consolidated Responsibilities**: All functionality integrated into one robust, well-tested component
+- **High Availability**: Simplified architecture reduces failure points while maintaining reliability
 
 ### ScreenshotCapture Protection Strategy:
-Since ScreenshotCapture cannot run as Windows Service (due to session constraints), it requires special protection:
-- **Process Protection**: Run with elevated privileges and system-like characteristics
-- **Auto-restart Mechanism**: WatchdogService monitors and restarts if terminated
-- **Stealth Operation**: Hidden UI, minimal resource footprint, resistant to casual termination
-- **Session Detection**: Automatically detect user logon/logoff and adapt accordingly
+The unified ScreenshotCapture service includes comprehensive protection:
+- **Service Mode Protection**: When running as Windows Service, uses standard Windows Service recovery options
+- **Process Protection**: Enhanced privilege management and system-like operational characteristics
+- **Auto-restart Mechanism**: WatchdogService monitors and restarts if terminated unexpectedly
+- **CLI Mode Safety**: Testing and debugging mode with controlled execution environment
+- **Session Detection**: Automatically adapts operation based on session context and requirements
+- **Stealth Operation**: Configurable UI visibility, optimized resource usage, robust against casual termination
 
 ### Technology Stack (Updated for Windows 11)
 
@@ -127,174 +146,176 @@ Since ScreenshotCapture cannot run as Windows Service (due to session constraint
       - `HealthCheckAsync()`
 - [x] **Development Environment Setup:**
    - [x] Create a Git repository.
-   - [x] Structure the Visual Studio solution with 3 separate projects (WorkerService, WatchdogService, ScreenshotCapture) and 1 shared project (WinServicesRAG.Core).
+   - [x] Structure the Visual Studio solution with 2 main projects (ScreenshotCapture, WatchdogService) and 1 shared project (WinServicesRAG.Core).
    - [ ] Set up a basic CI/CD pipeline (e.g., GitHub Actions, Azure DevOps).
 
 -----
 
-## Phase 2: WorkerService Development
+## Phase 2: ScreenshotCapture Development (COMPLETED)
 
-This is the main service that implements the business logic.
+This unified service implements all business logic, API communication, and screenshot functionality.
 
-- [x] **Step 1: Initialize Windows Service:**
+- [x] **Step 1: Initialize Unified Windows Service:**
 
-   - [x] Create a Worker Service project using the .NET template.
-   - [x] Integrate Serilog for logging configuration (service name, description, run-as account).
-   - [x] Configure logging (Serilog) to write to a file and be viewable in DebugView.
+   - [x] Create a unified service project supporting both Service and CLI modes.
+   - [x] Integrate Serilog for comprehensive logging configuration.
+   - [x] Configure logging (Serilog) to write to files and be viewable in DebugView.
+   - [x] Implement dual-mode operation (Service/CLI) with intelligent mode detection.
 
-- [x] **Step 2: Implement the Main Processing Flow with Rx.NET:**
+- [x] **Step 2: Implement Unified Processing Flow with Rx.NET:**
 
-   - [x] Implement `JobProcessingEngineBase` with `Observable.Interval` to periodically call the API to get jobs.
-   - [x] Filter for jobs where `status == "PENDING"` (WorkerService) and `status == "TAKE_SCREEN_SHOT"` (ScreenshotCapture).
-   - [x] Process jobs asynchronously using `SelectMany` and `ObserveOn` with Reactive Extensions.
-   - [x] **Screenshot Delegation:** WorkerService focuses on API communication and job processing, not screenshot capture.
-   - [x] **Job Processing Flow:**
-      1. Poll API for jobs with appropriate status filters
-      2. Process jobs based on type (SystemInfo, FileOperation, CustomCommand, etc.)
-      3. Update job status and handle API communication
+   - [x] Implement `JobProcessingEngineBase` with `Observable.Interval` for periodic API polling.
+   - [x] Filter for jobs where `status == "PENDING"` and `status == "TAKE_SCREEN_SHOT"`.
+   - [x] Process all job types asynchronously using `SelectMany` and `ObserveOn` with Reactive Extensions.
+   - [x] **Unified Job Processing Flow:**
+      1. Poll API for jobs with comprehensive status filtering
+      2. Process all job types (SystemInfo, FileOperation, CustomCommand, Screenshot)
+      3. Update job status and handle all API communication
       4. Monitor for completed job results via observables
-   - [x] **Error Handling Flow:**
-      1.  **In the Main Observable Stream:** Wrap the processing steps in child `Observable` with retry logic.
-      2.  **Processing Error:** If job processing fails, log error and update job status appropriately.
-      3.  **API Error (Upload/Update):** Use the `Retry(3)` operator on the `HttpClient` call. If it still fails after 3 attempts, log a critical error.
-      4.  **`Catch` Operator:** Use `Catch` to handle errors from the child processing stream. When an error occurs, it will switch to another stream to call the API to update the status to `ERROR` along with the `error_message`.
-      5.  **`Finally` Operator:** Regardless of success or failure, ensure resource cleanup (e.g., temporary files, process handles).
+   - [x] **Comprehensive Error Handling Flow:**
+      1. **In the Main Observable Stream:** Wrap processing steps in child `Observable` with retry logic.
+      2. **Processing Error:** If job processing fails, log error and update job status appropriately.
+      3. **API Error (Upload/Update):** Use `Retry(3)` operator on `HttpClient` calls with exponential backoff.
+      4. **`Catch` Operator:** Handle errors from child processing streams and update status to `ERROR`.
+      5. **`Finally` Operator:** Ensure comprehensive resource cleanup.
 
-- [x] **Step 3: Develop the Screenshot Module (Critical Task):** ✅ **COMPLETED**
+- [x] **Step 3: Advanced Screenshot Module Implementation:** ✅ **COMPLETED**
 
-   **Architecture Implementation:** Successfully implemented as an independent parallel service with modern technology stack.
+   **Architecture Implementation:** Successfully implemented as a unified service with comprehensive capabilities.
 
-   - [x] Created a separate `ScreenshotCapture` console application project.
-   - [x] Implemented continuous monitoring and job processing capabilities.
-   - [x] Independent operation parallel with WorkerService - no direct communication required.
    - [x] **Enhanced Screenshot Implementation:**
       - [x] **DirectX Desktop Duplication API (Vortice.Windows)** - Primary provider, optimized for Windows 11
       - [x] **WinAPI (BitBlt + PrintWindow)** - Reliable fallback, works on all Windows versions  
       - [x] **Windows Graphics Capture API Placeholder** - Future implementation when .NET compatibility improves
       - [x] **Fallback Strategy:** Automatic provider selection with graceful degradation
    
-   - [x] **Advanced Features Implemented:**
-      - [x] CLI mode for testing and debugging (`dotnet run -- cli --help`)
+   - [x] **Comprehensive Features Implemented:**
+      - [x] **Service Mode**: Full Windows Service implementation with job processing
+      - [x] **CLI Mode**: Interactive testing and debugging (`dotnet run -- cli --help`)
       - [x] Provider status checking (`dotnet run -- cli --status`)
       - [x] Manual provider selection (`dotnet run -- cli --provider "WinAPI"`)
-      - [x] Verbose logging support for troubleshooting
-      - [x] Comprehensive error handling and retry mechanisms
+      - [x] Verbose logging support for comprehensive troubleshooting
+      - [x] Advanced error handling and retry mechanisms
       - [x] Modern .NET 9 compatibility with Vortice.Windows DirectX wrapper
-      - [x] **New:** Async API integration with `IScreenshotManager` interface
-      - [x] **New:** Enhanced `ScreenshotResult` model with detailed error information
+      - [x] Async API integration with `IScreenshotManager` interface
+      - [x] Enhanced `ScreenshotResult` model with detailed error information
    
    - [x] **Test Results (Windows 11):**
       - [x] ✅ DirectX Desktop Duplication API: Available in user session, high performance
-      - [x] ✅ WinAPI (BitBlt): Available and working, produced 219KB screenshot
+      - [x] ✅ WinAPI (BitBlt): Available and working, produced optimized screenshots
       - [x] ⚠️ Windows Graphics Capture API: Disabled due to .NET Runtime compatibility issues
       - [x] ✅ Automatic provider fallback working correctly
       - [x] ✅ CLI testing interface functional and user-friendly
+      - [x] ✅ Service mode operational with full job processing
 
-- [x] **Step 4: Finalize API Client and Upload Flow:**
+- [x] **Step 4: Comprehensive API Client and Upload Flow:**
 
-   - [x] Implement `HttpClientFactory` to create the client.
-   - [x] Build the logic to call the `POST /upload/image` API with `MultipartFormDataContent`.
-   - [x] Build the logic to call the `PATCH /job/{job_id}` API to update the status to `TAKE_SCREEN_SHOT_SUCCESS` or `ERROR`.
-   - [x] **New:** Comprehensive retry logic with configurable attempts and delays
-   - [x] **New:** Structured error handling with typed responses
-   - [x] **New:** Health check endpoint support for monitoring API connectivity
+   - [x] Implement `HttpClientFactory` for optimized client management.
+   - [x] Build logic for `POST /upload/image` API with `MultipartFormDataContent`.
+   - [x] Build logic for `PATCH /job/{job_id}` API to update status.
+   - [x] **Enhanced Features:**
+      - [x] Comprehensive retry logic with configurable attempts and exponential backoff
+      - [x] Structured error handling with typed responses
+      - [x] Health check endpoint support for monitoring API connectivity
+      - [x] Support for all job types (not just screenshots)
 
-- [x] **Step 5: Core Shared Library Implementation:**
+- [x] **Step 5: Consolidated Core Library Integration:**
 
-   - [x] **WinServicesRAG.Core Library:** Centralized shared functionality for all services
-      - [x] **API Models:** `JobModel`, `UpdateJobStatusRequest`, `ApiResponse<T>`, `JobListResponse`, `ImageUploadResponse`
-      - [x] **Configuration:** `ApiClientOptions` with comprehensive settings (retry, timeout, authentication)
+   - [x] **WinServicesRAG.Core Library:** Centralized shared functionality
+      - [x] **API Models:** Complete model set for all API operations
+      - [x] **Configuration:** `ApiClientOptions` with comprehensive settings
       - [x] **Services:** 
-         - `IApiClient` and `ApiClient` implementation with retry logic and error handling
-         - `IScreenshotManager` and enhanced `ScreenshotManager` with async support
+         - `IApiClient` and `ApiClient` with advanced retry and error handling
+         - `IScreenshotManager` with async support and multiple providers
       - [x] **Processing Engines:** 
          - `JobProcessingEngineBase` - Abstract base with Rx.NET implementation
-         - `ScreenshotJobProcessingEngine` - Specialized for screenshot tasks
-         - `GeneralJobProcessingEngine` - For system info, file operations, custom commands
-      - [x] **Dependency Injection:** `ServiceCollectionExtensions` for easy configuration
+         - Unified processing for all job types
+      - [x] **Dependency Injection:** Comprehensive service registration
          - `AddWinServicesRAGCore()` - Core services registration
-         - `AddScreenshotServices()` - ScreenshotCapture-specific configuration
-         - `AddWorkerServices()` - WorkerService-specific configuration
+         - `AddScreenshotServices()` - Complete ScreenshotCapture configuration
          - `ValidateConfiguration()` - Configuration validation
 
-- [x] **Step 6: WorkerService Integration:**
+- [x] **Step 6: Final Integration:**
 
-   - [x] Updated WorkerService to use new Core library
-   - [x] Dependency injection configuration with proper API client setup
-   - [x] Observable-based job processing with error handling
-   - [x] Configuration files with development and production settings
+   - [x] Unified ScreenshotCapture handles all functionality
+   - [x] Comprehensive dependency injection configuration
+   - [x] Observable-based job processing with advanced error handling
+   - [x] Configuration files for development and production environments
    - [x] Enhanced logging with structured output and performance monitoring
 
 -----
 
 ## Phase 3: WatchdogService Development
 
-This service manages both WorkerService and ScreenshotCapture processes, ensuring high availability and system resilience.
+This service manages the ScreenshotCapture process, ensuring high availability and system resilience.
 
-- [ ] **Step 1: Initialize Dual-Process Watchdog Service:**
-   - [ ] Create a Worker Service project similar to the Worker.
+- [ ] **Step 1: Initialize ScreenshotCapture Watchdog Service:**
+   - [ ] Create a Worker Service project focused on monitoring ScreenshotCapture.
    - [ ] Integrate TopShelf, configure it to run as `LocalSystem`, and give it a distinct service name (e.g., `SystemHealthMonitor`).
-   - [ ] Design monitoring architecture for multiple independent processes.
+   - [ ] Design monitoring architecture for the unified ScreenshotCapture service.
 
-- [ ] **Step 2: Implement Multi-Process Monitoring Logic:**
-   - [ ] **WorkerService Monitoring:**
+- [ ] **Step 2: Implement ScreenshotCapture Monitoring Logic:**
+   - [ ] **ScreenshotCapture Service Monitoring:**
       - [ ] Run an infinite loop (with a reasonable `Task.Delay`, e.g., 5 seconds).
-      - [ ] Check for the existence of the `WorkerService.exe` process using `Process.GetProcessesByName()`.
-      - [ ] If the process is not found, execute the restart action.
-   - [ ] **ScreenshotCapture Monitoring:**
-      - [ ] Monitor ScreenshotCapture process health and session context.
-      - [ ] Detect user session changes and restart ScreenshotCapture in appropriate session.
+      - [ ] Check for the existence of the `ScreenshotCapture.exe` process using `Process.GetProcessesByName()`.
+      - [ ] Monitor both Service and CLI modes appropriately.
+      - [ ] If the process is not found or unhealthy, execute the restart action.
+   - [ ] **Enhanced Health Checking:**
+      - [ ] Monitor ScreenshotCapture process health and operational status.
+      - [ ] Detect user session changes and adapt monitoring accordingly.
       - [ ] Implement health checks via filesystem communication or API status.
       - [ ] Handle session switching scenarios (logoff/logon, RDP sessions).
 
 - [ ] **Step 3: Enhanced Process Management:**
-   - [ ] **Independent Process Lifecycle:**
-      - [ ] Start both WorkerService and ScreenshotCapture independently.
-      - [ ] Handle process dependencies and startup sequencing.
-      - [ ] Implement graceful shutdown coordination.
+   - [ ] **Unified Process Lifecycle:**
+      - [ ] Start ScreenshotCapture in appropriate mode (Service vs CLI).
+      - [ ] Handle mode transitions and operational context changes.
+      - [ ] Implement graceful shutdown and restart procedures.
    - [ ] **Session-Aware Management:**
-      - [ ] Detect active user sessions for ScreenshotCapture deployment.
+      - [ ] Detect active user sessions for optimal ScreenshotCapture deployment.
       - [ ] Handle multiple user sessions and session switching.
-      - [ ] Implement session 0 isolation awareness.
+      - [ ] Implement session 0 isolation awareness for service mode.
 
 - [ ] **Step 4: Enhance Tamper Resistance (Hardening):**
    - [ ] **Self-Recovery:**
-      - [ ] Configure the Windows Service Recovery Options (via TopShelf or the `sc failure` command). Set "Restart the Service" for First, Second, and Subsequent failures. Apply this to WorkerService, ScreenshotCapture, and the Watchdog.
+      - [ ] Configure the Windows Service Recovery Options (via TopShelf or the `sc failure` command). Set "Restart the Service" for First, Second, and Subsequent failures. Apply this to both ScreenshotCapture and the Watchdog.
    - [ ] **Mutual Monitoring:**
-      - [ ] **Watchdog monitors both processes:** Logic implemented in Step 2.
-      - [ ] **WorkerService monitors Watchdog:** Add a background thread in WorkerService to check for the existence of the `WatchdogService.exe` process. If the Watchdog is killed, the Worker will restart it.
-      - [ ] **ScreenshotCapture health reporting:** Periodic health signals to WatchdogService.
+      - [ ] **Watchdog monitors ScreenshotCapture:** Logic implemented in Step 2.
+      - [ ] **ScreenshotCapture monitors Watchdog:** Add a background thread in ScreenshotCapture to check for the existence of the `WatchdogService.exe` process. If the Watchdog is killed, ScreenshotCapture will restart it.
+      - [ ] **Health reporting:** Periodic health signals between services.
    - [ ] **Anti-Tampering:**
-      - [ ] On startup, all services check the hash (SHA256) of their own executable file and related service files. If the hash does not match a pre-embedded value, the service will raise an alarm (log a critical error) and may refuse to start.
+      - [ ] On startup, both services check the hash (SHA256) of their own executable file and related service files. If the hash does not match a pre-embedded value, the service will raise an alarm (log a critical error) and may refuse to start.
       - [ ] Include integrity verification for the entire service ecosystem.
    - [ ] **Anti-Debug:**
       - [ ] Add P/Invoke calls to `CheckRemoteDebuggerPresent()` or `IsDebuggerPresent()` at sensitive points in the code. If a debugger is detected, the service can exit immediately or exhibit deviant behavior.
    - [ ] **Windows Event Log Monitoring:**
-      - [ ] The Watchdog can subscribe to events in the `Application Event Log`. If it detects an Error event originating from `WorkerService` or `ScreenshotCapture`, it can immediately trigger the restart process without waiting for the next polling cycle.
+      - [ ] The Watchdog can subscribe to events in the `Application Event Log`. If it detects an Error event originating from `ScreenshotCapture`, it can immediately trigger the restart process without waiting for the next polling cycle.
 
 -----
 
 ## Phase 4: Integration, Testing & Deployment
 
 - [ ] **Integration Testing:**
-   - [ ] **Independent Dual API Testing:** Test that both WorkerService and ScreenshotCapture operate independently with their own API connections
-   - [ ] **Simultaneous Operation Testing:** Both services polling API Server simultaneously without conflicts
-   - [ ] **Job Isolation Testing:** Verify WorkerService processes business jobs while ScreenshotCapture handles screenshot requests independently
-   - [ ] **API Load Testing:** Test API Server handling multiple simultaneous connections from both services
-   - [ ] **WatchdogService Testing:** Test dual-process monitoring - kill one service and verify Watchdog restarts it without affecting the other
-   - [ ] **Session Isolation Testing:** Verify that ScreenshotCapture works correctly in user session while WorkerService operates in Session 0
-   - [ ] **Independent Failover Testing:** Test various failure scenarios and verify services can recover independently
+   - [ ] **Unified Service Testing:** Test that ScreenshotCapture operates correctly in both Service and CLI modes
+   - [ ] **API Integration Testing:** Verify ScreenshotCapture handles all job types with proper API communication
+   - [ ] **Job Processing Testing:** Test comprehensive job processing including business logic and screenshot capture
+   - [ ] **API Load Testing:** Test API Server handling concurrent requests from ScreenshotCapture
+   - [ ] **WatchdogService Testing:** Test ScreenshotCapture monitoring - kill the service and verify Watchdog restarts it correctly
+   - [ ] **Session Management Testing:** Verify that ScreenshotCapture adapts correctly to different session contexts
+   - [ ] **Mode Switching Testing:** Test transitions between Service and CLI modes
+   - [ ] **Comprehensive Failover Testing:** Test various failure scenarios and verify service can recover appropriately
 - [ ] **Fault Tolerance Testing:**
-   - [ ] **Kill Process:** Use Task Manager (with Admin rights) to kill the `WorkerService.exe` process. Measure the time it takes for the Watchdog to restart it. Repeat for `WatchdogService.exe`.
-   - [ ] **Kill ScreenshotCapture:** Test behavior when ScreenshotCapture process is terminated during operation.
-   - [ ] **Stop Service:** Use `services.msc` to Stop the WorkerService. Check if the Watchdog detects this and restarts it (note: this may be harder as the service is stopped "cleanly").
-   - [ ] **Simulate Crash:** Add a line of code `throw new Exception("Simulated Crash")` to the WorkerService to see if it restarts according to its Recovery configuration.
-   - [ ] **Network Disconnection:** Disconnect the network and verify how the Worker handles API errors (retries, logs, and continues to operate).
+   - [ ] **Kill Process:** Use Task Manager (with Admin rights) to kill the `ScreenshotCapture.exe` process. Measure the time it takes for the Watchdog to restart it. Repeat for `WatchdogService.exe`.
+   - [ ] **Kill ScreenshotCapture:** Test behavior when ScreenshotCapture process is terminated during different operational modes.
+   - [ ] **Stop Service:** Use `services.msc` to Stop the ScreenshotCapture service. Check if the Watchdog detects this and restarts it appropriately.
+   - [ ] **Simulate Crash:** Add a line of code `throw new Exception("Simulated Crash")` to ScreenshotCapture to test recovery according to its configuration.
+   - [ ] **Network Disconnection:** Disconnect the network and verify how ScreenshotCapture handles API errors (retries, logs, and continues to operate).
+   - [ ] **Mode Transition Testing:** Test switching between Service and CLI modes under various conditions.
 - [ ] **Packaging and Deployment:**
    - [ ] Build an installer using WiX Toolset or Inno Setup.
    - [ ] **Installer Tasks:**
-      - [ ] Copy the executable files for both services to `C:\Program Files\YourAppName`.
-      - [ ] Run the command-line to register both Windows Services (`YourApp.exe install start`).
+      - [ ] Copy the executable files for ScreenshotCapture and WatchdogService to `C:\Program Files\YourAppName`.
+      - [ ] Run the command-line to register both Windows Services.
       - [ ] Configure the Recovery options for both services using the `sc failure` command.
       - [ ] Ensure both services are started after the installation is complete.
 - [ ] **Documentation:**
