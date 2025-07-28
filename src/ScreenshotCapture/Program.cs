@@ -2,6 +2,7 @@
 using Serilog;
 using System.CommandLine;
 using System.Text;
+using WinServicesRAG.Core.Configuration;
 
 // Configure console to support Vietnamese characters
 Console.OutputEncoding = Encoding.UTF8;
@@ -10,14 +11,14 @@ Console.OutputEncoding = Encoding.UTF8;
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
     .WriteTo.Console()
-    .WriteTo.File(path: @"D:\Documents\Temporary\WinServicesRAG\logs\service-.log",
+    .WriteTo.File($@"D:\Documents\Temporary\WinServicesRAG\logs\{WatchdogServiceConfig.ScreenshotCaptureLogFileName}-.log",
         rollingInterval: RollingInterval.Day,
         retainedFileCountLimit: 7)
     .CreateLogger();
 
 try
 {
-    Log.Information(messageTemplate: "=== ScreenshotCapture Independent Service ===");
+    Log.Information("=== ScreenshotCapture Independent Service ===");
 
     // Create and configure the root command
     RootCommand rootCommand = CommandSetup.CreateRootCommand();
@@ -25,20 +26,20 @@ try
     // Default to service mode if no command specified
     if (args.Length == 0)
     {
-        args = new[]
-        {
+        args =
+        [
             "service",
             "--hide-console"
-        };
+        ];
     }
 
     // Parse and invoke
-    await rootCommand.InvokeAsync(args: args);
+    await rootCommand.InvokeAsync(args);
 }
 catch (Exception ex)
 {
-    Log.Fatal(exception: ex, messageTemplate: "Application terminated unexpectedly");
-    Environment.Exit(exitCode: 1);
+    Log.Fatal(ex, "Application terminated unexpectedly");
+    Environment.Exit(1);
 }
 finally
 {

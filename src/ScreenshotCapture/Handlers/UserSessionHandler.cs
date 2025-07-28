@@ -22,16 +22,16 @@ public static class UserSessionHandler
             RuntimeDataHelper.SetData("SESSION_ID", sessionId.ToString());
 
             // Configure enhanced logging for user session mode
-            if (verbose)
-            {
-                Log.Logger = new LoggerConfiguration()
-                    .MinimumLevel.Debug()
-                    .WriteTo.Console()
-                    .WriteTo.File(path: @$"D:\Documents\Temporary\WinServicesRAG\logs\screenshot-capture-session{sessionId}-.log",
-                        rollingInterval: RollingInterval.Day,
-                        retainedFileCountLimit: 7)
-                    .CreateLogger();
-            }
+            // if (verbose)
+            // {
+            //     Log.Logger = new LoggerConfiguration()
+            //         .MinimumLevel.Debug()
+            //         .WriteTo.Console()
+            //         .WriteTo.File(path: @$"D:\Documents\Temporary\WinServicesRAG\logs\service-session{sessionId}-.log",
+            //             rollingInterval: RollingInterval.Day,
+            //             retainedFileCountLimit: 7)
+            //         .CreateLogger();
+            // }
 
             Log.Information("=== ScreenshotCapture User Session Mode ===");
             Log.Information("Session ID: {SessionId}", sessionId);

@@ -47,13 +47,19 @@ Giải pháp **Interactive Service** đã được implement hoàn chỉnh với
 
 ## 🔧 Quick Start Guide
 
-### Step 1: Build & Test
+### Step 1: Build
+Manually build all components
 ```powershell
-# Test complete implementation
-.\test-interactive-service.ps1
+cd src\WinServicesRAG.Core
+dotnet build
 
-# Test with service installation (requires admin)
-.\test-interactive-service.ps1 -TestServiceInstallation
+# Build WatchdogService
+cd ..\WatchdogService
+dotnet build
+
+# Build ScreenshotCapture
+cd ..\ScreenshotCapture
+dotnet build
 ```
 
 ### Step 2: Production Install
@@ -63,14 +69,14 @@ Giải pháp **Interactive Service** đã được implement hoàn chỉnh với
 
 # Verify installation
 Get-Service WatchdogService
-Get-Content "D:\Documents\Temporary\WinServicesRAG\logs\watchdog-service-*.log" -Tail 10
+Get-Content "D:\Documents\Temporary\WinServicesRAG\logs\watchdog_service-*.log" -Tail 10
 ```
 
 ### Step 3: User Session Testing
 ```powershell
 # Login as user, then check process spawning
 Get-Process ScreenshotCapture -IncludeUserName
-Get-Content "D:\Documents\Temporary\WinServicesRAG\logs\screenshot-capture-session1-*.log" -Tail 10
+Get-Content "D:\Documents\Temporary\WinServicesRAG\logs\xxx_service-*.log" -Tail 10
 ```
 
 ## 📊 Expected Behavior

@@ -11,7 +11,7 @@ public static class CommandSetup
         // Add service and CLI commands
         rootCommand.AddCommand(command: CreateServiceCommand());
         rootCommand.AddCommand(command: CreateCliCommand());
-        rootCommand.AddCommand(command: UserSessionCommand.CreateUserSessionCommand());
+        rootCommand.AddCommand(command: CreateUserSessionCommand());
 
         return rootCommand;
     }
@@ -85,5 +85,28 @@ public static class CommandSetup
             symbol5: verboseOption);
 
         return cliCommand;
+    }
+
+    private static Command CreateUserSessionCommand()
+    {
+        var userSessionCommand = new Command("user-session", "Run in user session mode (managed by WatchdogService)");
+
+        var sessionIdOption = new Option<int>(
+            name: "--session-id",
+            description: "Target session ID to run in")
+        {
+            IsRequired = true
+        };
+
+        var verboseOption = new Option<bool>(
+            name: "--verbose",
+            description: "Enable verbose logging");
+
+        userSessionCommand.AddOption(sessionIdOption);
+        userSessionCommand.AddOption(verboseOption);
+
+        userSessionCommand.SetHandler(UserSessionHandler.HandleUserSessionMode, sessionIdOption, verboseOption);
+
+        return userSessionCommand;
     }
 }

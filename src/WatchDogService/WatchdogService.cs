@@ -136,6 +136,7 @@ public class WatchdogService(
 
     private async Task MonitorAndMaintainProcessesAsync()
     {
+        await Task.Delay(100);
         lock (_lockObject)
         {
             var sessionsToCheck = _userProcesses.Keys.ToList();
@@ -144,16 +145,14 @@ public class WatchdogService(
             {
                 ProcessInfo processInfo = _userProcesses[sessionId];
 
-                if (!processLauncher.IsProcessRunning(processInfo.ProcessId))
-                {
-                    logger.LogWarning("ScreenshotCapture process {ProcessId} in session {SessionId} is no longer running",
-                        processInfo.ProcessId, sessionId);
+                if (processLauncher.IsProcessRunning(processInfo.ProcessId)) continue;
+                logger.LogWarning("ScreenshotCapture process {ProcessId} in session {SessionId} is no longer running",
+                    processInfo.ProcessId, sessionId);
 
-                    _userProcesses.Remove(sessionId);
+                _userProcesses.Remove(sessionId);
 
-                    // Schedule restart if session is still active
-                    _ = Task.Run(function: async () => await HandleProcessCrashAsync(sessionId));
-                }
+                // Schedule restart if session is still active
+                _ = Task.Run(function: async () => await HandleProcessCrashAsync(sessionId));
             }
         }
     }
@@ -172,13 +171,13 @@ public class WatchdogService(
 
     private async Task HandleSessionLogoffAsync(SessionInfo sessionInfo)
     {
+        await Task.Delay(100);
         logger.LogInformation("Cleaning up ScreenshotCapture for ending session {SessionId}", sessionInfo.SessionId);
 
         lock (_lockObject)
         {
-            if (_userProcesses.TryGetValue(sessionInfo.SessionId, out ProcessInfo? processInfo))
+            if (_userProcesses.Remove(sessionInfo.SessionId, out ProcessInfo? processInfo))
             {
-                _userProcesses.Remove(sessionInfo.SessionId);
                 _restartAttempts.Remove(sessionInfo.SessionId);
 
                 _ = Task.Run(function: async () =>

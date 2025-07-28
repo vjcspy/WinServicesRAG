@@ -8,6 +8,8 @@ namespace WinServicesRAG.Core.Configuration;
 public class WatchdogServiceConfig
 {
     public const string SectionName = "WatchdogService";
+    public const string ScreenshotCaptureLogFileName = "xxx_service";
+    public const string WatchdogLogFileName = "watchdog_service";
 
     /// <summary>
     /// Path to ScreenshotCapture executable. If not specified, will auto-detect.
@@ -22,7 +24,7 @@ public class WatchdogServiceConfig
     /// <summary>
     /// Heartbeat interval in seconds for health monitoring
     /// </summary>
-    public int HeartbeatIntervalSeconds { get; set; } = 30;
+    public int HeartbeatIntervalSeconds { get; set; } = 10;
 
     /// <summary>
     /// Delay before restarting crashed process in seconds
