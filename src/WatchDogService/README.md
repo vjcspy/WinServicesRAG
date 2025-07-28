@@ -129,21 +129,6 @@ e:\cs\WinServicesRAG\publish\
 
 ## Usage
 
-### CLI Testing
-```bash
-# Check configuration and path resolution
-dotnet run -- config-check
-
-# Show session information
-dotnet run -- session-info
-
-# Test process launching (development mode)
-dotnet run -- test-launch --session-id 1
-
-cd src\WatchdogService\bin\Debug\net9.0
-.\WatchdogService.exe
-```
-
 ### Windows Service Installation
 ```powershell
 # Use ps1

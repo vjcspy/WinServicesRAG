@@ -89,14 +89,22 @@ public class Program
                         retainedFileCountLimit: 7,
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}");
 
-                // Add EventLog only on Windows
-                if (OperatingSystem.IsWindows())
+                // Add EventLog only when running as Windows Service (not CLI mode)
+                if (OperatingSystem.IsWindows() && IsRunningAsService())
                 {
-                    configuration.WriteTo.EventLog(
-                        "WatchdogService",
-                        "Application",
-                        manageEventSource: true,
-                        restrictedToMinimumLevel: LogEventLevel.Warning);
+                    try
+                    {
+                        configuration.WriteTo.EventLog(
+                            "WatchdogService",
+                            "Application",
+                            manageEventSource: true,
+                            restrictedToMinimumLevel: LogEventLevel.Warning);
+                    }
+                    catch (Exception ex)
+                    {
+                        // If EventLog fails, just continue without it
+                        Console.WriteLine($"Warning: Could not initialize EventLog: {ex.Message}");
+                    }
                 }
             });
     }
@@ -135,6 +143,20 @@ public class Program
         {
             logger.LogError(ex, "Configuration validation failed");
             throw;
+        }
+    }
+
+    private static bool IsRunningAsService()
+    {
+        // Simple check: if running interactively (console available), not a service
+        // This is a common way to detect service vs console mode
+        try
+        {
+            return !Environment.UserInteractive;
+        }
+        catch
+        {
+            return false;
         }
     }
 
