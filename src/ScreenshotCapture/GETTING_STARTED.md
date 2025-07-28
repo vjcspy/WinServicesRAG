@@ -59,15 +59,62 @@ Screenshot saved successfully: screenshot_20250712_155030.png
 File size: 219,846 bytes
 ```
 
-#### 3. Service Mode (Background Service)
+#### 3. Service Mode (Background Service Simulation)
 
 ```bash
-# Run in service mode (background service simulation)
+# Run in service mode for testing (background service simulation)
 dotnet run -- service --verbose
 
 # Run with custom work directory
 dotnet run -- service --work-dir "C:\Temp\WinServicesRAG" --poll-interval 10
 ```
+
+#### 4. Windows Service Installation (Production Mode)
+
+For production deployment, install as actual Windows Service:
+
+##### Build and Publish
+```bash
+# From solution root
+dotnet build --configuration Release
+
+# Publish ScreenshotCapture
+cd src\ScreenshotCapture
+dotnet publish -c Release --self-contained false --output "..\..\publish\ScreenshotService"
+```
+
+##### Install Windows Service
+```powershell
+# Open PowerShell as Administrator
+cd E:\cs\WinServicesRAG
+
+# Install service
+.\install-service.ps1
+```
+
+##### Manage Windows Service
+```powershell
+# Check service status
+Get-Service ScreenshotCaptureService
+
+# Start/Stop/Restart service
+Start-Service ScreenshotCaptureService
+Stop-Service ScreenshotCaptureService
+Restart-Service ScreenshotCaptureService
+
+# View logs
+Get-Content "D:\Documents\Temporary\WinServicesRAG\logs\screenshot-capture-*.log" -Tail 20
+
+# Uninstall service
+.\uninstall-service.ps1
+```
+
+##### Service Details
+- **Service Name:** `ScreenshotCaptureService`
+- **Display Name:** `Screenshot Capture Service`
+- **Working Directory:** `C:\ProgramData\WinServicesRAG`
+- **Auto-restart:** Enabled (restart on crash)
+- **Logs:** `D:\Documents\Temporary\WinServicesRAG\logs\`
 
 ### 🔧 Troubleshooting
 
@@ -77,8 +124,15 @@ dotnet run -- service --work-dir "C:\Temp\WinServicesRAG" --poll-interval 10
 - **GPU Drivers**: Đảm bảo drivers cập nhật
 
 #### Permission Issues
-- Chạy terminal as Administrator nếu gặp access denied
+- Chạy terminal as Administrator nếi gặp access denied
 - Check Windows Defender/Antivirus blocking
+- For Windows Service: PowerShell phải run as Administrator
+
+#### Windows Service Issues
+- **Service won't start**: Check logs in `D:\Documents\Temporary\WinServicesRAG\logs\`
+- **Permission denied**: Run PowerShell as Administrator
+- **Port conflicts**: Check if other services using same ports
+- **Dependencies missing**: Ensure .NET 9 Runtime installed on target machine
 
 #### Build Errors
 ```bash
@@ -114,7 +168,9 @@ src/
 - [ ] ✅ Screenshot capture (WinAPI)
 - [ ] ✅ File output (.png format)
 - [ ] ⚠️ DirectX provider (cần user session)
-- [ ] 🚧 Service mode
+- [ ] ✅ Service mode (development testing)
+- [ ] ✅ Windows Service installation
+- [ ] ✅ Windows Service auto-restart
 - [ ] 🚧 API integration
 - [ ] 🚧 Watchdog monitoring
 
@@ -127,6 +183,9 @@ src/
 | **DirectX (Vortice.Windows)** | ✅ Working | Modern DirectX wrapper, session-dependent |
 | **WinAPI (BitBlt)** | ✅ Working | Reliable fallback, cross-session compatible |
 | **Windows Graphics Capture** | ⚠️ Disabled | .NET compatibility issues |
+| **Service Mode (Development)** | ✅ Complete | Background service simulation |
+| **Windows Service** | ✅ Complete | Production-ready Windows Service |
+| **Service Auto-restart** | ✅ Complete | Recovery options configured |
 | **WorkerService** | 🚧 TODO | Business logic service |
 | **WatchdogService** | 🚧 TODO | Process monitoring service |
 | **API Integration** | 🚧 TODO | HTTP client implementation |
@@ -148,11 +207,31 @@ src/
 ## 🎯 Quick Test Commands
 
 ```bash
-# Quick test sequence
+# Development Testing Sequence
 cd src\ScreenshotCapture
 dotnet run -- cli --status           # Check providers
 dotnet run -- cli --verbose          # Take screenshot with logging
 dir *.png                           # Verify output file created
+
+# Service Mode Testing
+dotnet run -- service --verbose      # Test service mode locally
+
+# Production Windows Service Testing
+.\install-service.ps1                # Install as Windows Service (PowerShell as Admin)
+Get-Service ScreenshotCaptureService # Check service status
+Get-Content "D:\Documents\Temporary\WinServicesRAG\logs\screenshot-capture-*.log" -Tail 10  # Check logs
 ```
+
+### 📂 Service File Locations
+
+**Development (dotnet run):**
+- Default work dir: `%APPDATA%\WinServicesRAG` or custom via `--work-dir`
+
+**Production Windows Service:**
+- Working Directory: `C:\ProgramData\WinServicesRAG\`
+- Jobs: `C:\ProgramData\WinServicesRAG\jobs\`
+- Screenshots: `C:\ProgramData\WinServicesRAG\screenshots\`
+- Results: `C:\ProgramData\WinServicesRAG\results\`
+- Logs: `D:\Documents\Temporary\WinServicesRAG\logs\`
 
 Enjoy testing! 🚀
