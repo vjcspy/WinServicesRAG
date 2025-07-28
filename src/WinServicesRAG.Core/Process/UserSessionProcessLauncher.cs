@@ -302,7 +302,7 @@ public class UserSessionProcessLauncher(ILogger<UserSessionProcessLauncher> logg
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool CreateProcessAsUser(
         IntPtr hToken,
-        string lpApplicationName,
+        string? lpApplicationName,
         string lpCommandLine,
         IntPtr lpProcessAttributes,
         IntPtr lpThreadAttributes,

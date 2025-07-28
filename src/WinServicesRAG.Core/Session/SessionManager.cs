@@ -126,7 +126,6 @@ public class SessionManager : ISessionManager, IDisposable
         {
             IntPtr sessionInfoPtr = IntPtr.Zero;
             int sessionCount = 0;
-            int retval = 0;
 
             if (WTSEnumerateSessions(IntPtr.Zero, 0, 1, ref sessionInfoPtr, ref sessionCount))
             {
