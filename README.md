@@ -20,23 +20,23 @@ This project aims to build an extremely stable and tamper-resistant Windows moni
 ### Architecture Overview
 
 ```
-                                 ┌─────────────────┐
-                                 │   API Server    │
-                                 │                 │
-                                 │ - Get Jobs      │
-                                 │ - Upload Images │
-                                 │ - Update Status │
-                                 │ - Job Queue     │
-                                 └─────────────────┘
-                                          ▲
-                                          │ HTTP API
-                                          │
-                              ┌───────────┼───────────┐
-                              │           │           │
-                              ▼           ▼           ▼
+                         ┌─────────────────┐
+                         │   API Server    │
+                         │                 │
+                         │ - Get Jobs      │
+                         │ - Upload Images │
+                         │ - Update Status │
+                         │ - Job Queue     │
+                         └─────────────────┘
+                                  ▲
+                                  │ HTTP API
+                                  │
+                                  │
+                                  │           
+                                  ▼           
                 ┌──────────────────────────────────────┐
                 │       ScreenshotCapture              │
-                │    (Service & Console Modes)        │
+                │    (Service & Console Modes)         │
                 │                                      │
                 │ Service Mode:                        │
                 │ - API Client                         │
@@ -53,27 +53,27 @@ This project aims to build an extremely stable and tamper-resistant Windows moni
                 │                                      │
                 │ Screenshot Technologies:             │
                 │ - DirectX Desktop Duplication API    │
-                │ - WinAPI (BitBlt + PrintWindow)     │
-                │ - Windows Graphics Capture API      │
+                │ - WinAPI (BitBlt + PrintWindow)      │
+                │ - Windows Graphics Capture API       │
                 └──────────────────────────────────────┘
-                          ▲
-                          │
-                          │ Monitor & Restart
-                          │
-                 ┌────────────────────────────────────────────┐
-                 │           WatchdogService                  │
-                 │           (Session 0)                      │
-                 │                                            │
-                 │ ┌─────────────────────────────────────────┐│
-                 │ │     ScreenshotCapture Monitor           ││
-                 │ │                                         ││
-                 │ │ - Health Check                          ││
-                 │ │ - Auto Restart                          ││
-                 │ │ - Log Monitor                           ││
-                 │ │ - Session Detection                     ││
-                 │ │ - Service/CLI Mode Management           ││
-                 │ └─────────────────────────────────────────┘│
-                 └────────────────────────────────────────────┘
+                                  ▲
+                                  │
+                                  │ Monitor & Restart
+                                  │
+             ┌────────────────────────────────────────────┐
+             │           WatchdogService                  │
+             │           (Session 0)                      │
+             │                                            │
+             │ ┌─────────────────────────────────────────┐│
+             │ │     ScreenshotCapture Monitor           ││
+             │ │                                         ││
+             │ │ - Health Check                          ││
+             │ │ - Auto Restart                          ││
+             │ │ - Log Monitor                           ││
+             │ │ - Session Detection                     ││
+             │ │ - Service/CLI Mode Management           ││
+             │ └─────────────────────────────────────────┘│
+             └────────────────────────────────────────────┘
 ```
 
 **Key Design Decisions:**
@@ -245,51 +245,66 @@ This unified service implements all business logic, API communication, and scree
 
 -----
 
-## Phase 3: WatchdogService Development
+## Phase 3: WatchdogService Development (COMPLETED)
+
+**Implementation Status:** ✅ **Core functionality completed** - WatchdogService successfully monitors ScreenshotCapture processes across user sessions with smart session management and automatic restart capabilities.
 
 This service manages the ScreenshotCapture process, ensuring high availability and system resilience.
 
-- [ ] **Step 1: Initialize ScreenshotCapture Watchdog Service:**
-   - [ ] Create a Worker Service project focused on monitoring ScreenshotCapture.
-   - [ ] Integrate TopShelf, configure it to run as `LocalSystem`, and give it a distinct service name (e.g., `SystemHealthMonitor`).
-   - [ ] Design monitoring architecture for the unified ScreenshotCapture service.
+- [x] **Step 1: Initialize ScreenshotCapture Watchdog Service:** ✅ **COMPLETED**
+   - [x] Create a Worker Service project focused on monitoring ScreenshotCapture.
+   - [x] Implement as BackgroundService using Microsoft.Extensions.Hosting.WindowsServices.
+   - [x] Configure to run as Windows Service with smart session management.
+   - [x] Design monitoring architecture for the unified ScreenshotCapture service.
 
-- [ ] **Step 2: Implement ScreenshotCapture Monitoring Logic:**
-   - [ ] **ScreenshotCapture Service Monitoring:**
-      - [ ] Run an infinite loop (with a reasonable `Task.Delay`, e.g., 5 seconds).
-      - [ ] Check for the existence of the `ScreenshotCapture.exe` process using `Process.GetProcessesByName()`.
-      - [ ] Monitor both Service and CLI modes appropriately.
-      - [ ] If the process is not found or unhealthy, execute the restart action.
-   - [ ] **Enhanced Health Checking:**
-      - [ ] Monitor ScreenshotCapture process health and operational status.
-      - [ ] Detect user session changes and adapt monitoring accordingly.
-      - [ ] Implement health checks via filesystem communication or API status.
-      - [ ] Handle session switching scenarios (logoff/logon, RDP sessions).
+- [x] **Step 2: Implement ScreenshotCapture Monitoring Logic:** ✅ **COMPLETED**
+   - [x] **ScreenshotCapture Service Monitoring:**
+      - [x] Run monitoring loop with configurable heartbeat interval (default 10 seconds).
+      - [x] Track ScreenshotCapture processes per user session using `ProcessInfo` objects.
+      - [x] Monitor process health via `IUserSessionProcessLauncher.IsProcessRunning()`.
+      - [x] Automatic restart on process crash with configurable retry attempts.
+   - [x] **Enhanced Health Checking:**
+      - [x] Monitor ScreenshotCapture process health and operational status.
+      - [x] Session change detection via `ISessionManager` with WTS API integration.
+      - [x] Handle session switching scenarios (logoff/logon, RDP sessions).
+      - [x] Comprehensive logging for troubleshooting and monitoring.
 
-- [ ] **Step 3: Enhanced Process Management:**
-   - [ ] **Unified Process Lifecycle:**
-      - [ ] Start ScreenshotCapture in appropriate mode (Service vs CLI).
-      - [ ] Handle mode transitions and operational context changes.
-      - [ ] Implement graceful shutdown and restart procedures.
-   - [ ] **Session-Aware Management:**
-      - [ ] Detect active user sessions for optimal ScreenshotCapture deployment.
-      - [ ] Handle multiple user sessions and session switching.
-      - [ ] Implement session 0 isolation awareness for service mode.
+- [x] **Step 3: Enhanced Process Management:** ✅ **COMPLETED**
+   - [x] **Unified Process Lifecycle:**
+      - [x] Launch ScreenshotCapture in user-session mode with session-specific arguments.
+      - [x] Graceful process termination on session logoff.
+      - [x] Smart path resolution with automatic ScreenshotCapture.exe detection.
+   - [x] **Session-Aware Management:**
+      - [x] Active user session detection using Windows Terminal Services APIs.
+      - [x] Multi-session support for RDP and multiple user scenarios.
+      - [x] Session 0 isolation awareness - WatchdogService runs in Session 0, manages user session processes.
+      - [x] Configurable session filtering (skip system sessions, inactive sessions).
 
-- [ ] **Step 4: Enhance Tamper Resistance (Hardening):**
-   - [ ] **Self-Recovery:**
-      - [ ] Configure the Windows Service Recovery Options (via TopShelf or the `sc failure` command). Set "Restart the Service" for First, Second, and Subsequent failures. Apply this to both ScreenshotCapture and the Watchdog.
+- [ ] **Step 4: Enhance Tamper Resistance (Hardening):** ⚠️ **PARTIALLY COMPLETED**
+   - [x] **Self-Recovery:**
+      - [x] Implemented Windows Service with automatic restart capabilities.
+      - [x] Configurable restart attempts with exponential backoff.
+      - [x] Process crash detection and recovery with session awareness.
    - [ ] **Mutual Monitoring:**
-      - [ ] **Watchdog monitors ScreenshotCapture:** Logic implemented in Step 2.
-      - [ ] **ScreenshotCapture monitors Watchdog:** Add a background thread in ScreenshotCapture to check for the existence of the `WatchdogService.exe` process. If the Watchdog is killed, ScreenshotCapture will restart it.
-      - [ ] **Health reporting:** Periodic health signals between services.
+      - [x] **Watchdog monitors ScreenshotCapture:** ✅ Fully implemented with session-aware monitoring.
+      - [ ] **ScreenshotCapture monitors Watchdog:** Not yet implemented - add background thread in ScreenshotCapture to check for WatchdogService.exe process.
+      - [ ] **Health reporting:** Basic health monitoring implemented, advanced IPC health signals pending.
    - [ ] **Anti-Tampering:**
-      - [ ] On startup, both services check the hash (SHA256) of their own executable file and related service files. If the hash does not match a pre-embedded value, the service will raise an alarm (log a critical error) and may refuse to start.
+      - [ ] File hash verification (SHA256) for executable integrity checking.
       - [ ] Include integrity verification for the entire service ecosystem.
    - [ ] **Anti-Debug:**
-      - [ ] Add P/Invoke calls to `CheckRemoteDebuggerPresent()` or `IsDebuggerPresent()` at sensitive points in the code. If a debugger is detected, the service can exit immediately or exhibit deviant behavior.
+      - [ ] Add P/Invoke calls to `CheckRemoteDebuggerPresent()` or `IsDebuggerPresent()`.
    - [ ] **Windows Event Log Monitoring:**
-      - [ ] The Watchdog can subscribe to events in the `Application Event Log`. If it detects an Error event originating from `ScreenshotCapture`, it can immediately trigger the restart process without waiting for the next polling cycle.
+      - [ ] Subscribe to Application Event Log for ScreenshotCapture error events.
+
+**Additional Features Implemented:**
+- [x] **Smart Path Resolution:** Auto-detection of ScreenshotCapture.exe in various deployment scenarios
+- [x] **Configuration Validation:** Comprehensive startup validation with detailed error reporting  
+- [x] **Structured Logging:** Serilog integration with file, console, and EventLog outputs
+- [x] **Installation Scripts:** PowerShell scripts for service installation/uninstallation
+- [x] **Production Deployment:** Published binaries with all dependencies included
+- [x] **Core Library Integration:** Full utilization of WinServicesRAG.Core components
+- [x] **Interactive Service Pattern:** Successfully implemented session-aware process management
 
 -----
 
@@ -300,7 +315,8 @@ This service manages the ScreenshotCapture process, ensuring high availability a
    - [ ] **API Integration Testing:** Verify ScreenshotCapture handles all job types with proper API communication
    - [ ] **Job Processing Testing:** Test comprehensive job processing including business logic and screenshot capture
    - [ ] **API Load Testing:** Test API Server handling concurrent requests from ScreenshotCapture
-   - [ ] **WatchdogService Testing:** Test ScreenshotCapture monitoring - kill the service and verify Watchdog restarts it correctly
+   - [x] **WatchdogService Basic Testing:** ✅ Basic functionality verified - service starts, monitors sessions, manages processes
+   - [ ] **Advanced WatchdogService Testing:** Test ScreenshotCapture monitoring - kill the service and verify Watchdog restarts it correctly
    - [ ] **Session Management Testing:** Verify that ScreenshotCapture adapts correctly to different session contexts
    - [ ] **Mode Switching Testing:** Test transitions between Service and CLI modes
    - [ ] **Comprehensive Failover Testing:** Test various failure scenarios and verify service can recover appropriately
