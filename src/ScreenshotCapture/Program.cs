@@ -10,7 +10,7 @@ Console.OutputEncoding = Encoding.UTF8;
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
     .WriteTo.Console()
-    .WriteTo.File(path: @"D:\Documents\Temporary\WinServicesRAG\logs\screenshot-capture-.log",
+    .WriteTo.File(path: @"D:\Documents\Temporary\WinServicesRAG\logs\service-.log",
         rollingInterval: RollingInterval.Day,
         retainedFileCountLimit: 7)
     .CreateLogger();
