@@ -10,12 +10,11 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        // Configure Serilog early for startup logging
+        // Configure minimal early logging for startup
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
-            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .WriteTo.Console()
-            .CreateBootstrapLogger();
+            .CreateLogger();
 
         try
         {
@@ -70,10 +69,8 @@ public class Program
             })
             .UseSerilog(configureLogger: (context, services, configuration) =>
             {
-                string logPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                    "WinServicesRAG", "logs");
-
+                // Use the specific log path requested
+                string logPath = @"D:\Documents\Temporary\WinServicesRAG\logs";
                 Directory.CreateDirectory(logPath);
 
                 configuration
@@ -87,9 +84,9 @@ public class Program
                     .WriteTo.Console(
                         outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
                     .WriteTo.File(
-                        Path.Combine(logPath, "watchdog-service-.log"),
+                        Path.Combine(logPath, "watchdog-.log"),
                         rollingInterval: RollingInterval.Day,
-                        retainedFileCountLimit: 30,
+                        retainedFileCountLimit: 7,
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}");
 
                 // Add EventLog only on Windows
