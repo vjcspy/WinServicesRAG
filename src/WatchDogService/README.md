@@ -139,10 +139,16 @@ dotnet run -- session-info
 
 # Test process launching (development mode)
 dotnet run -- test-launch --session-id 1
+
+cd src\WatchdogService\bin\Debug\net9.0
+.\WatchdogService.exe
 ```
 
 ### Windows Service Installation
 ```powershell
+# Use ps1
+.\install-watchdog-service.ps1
+
 # Install WatchdogService
 sc.exe create WatchdogService binPath="C:\Path\To\WatchdogService.exe" start=auto
 net start WatchdogService
