@@ -5,6 +5,7 @@ public class CommonValue
 
     public const string RUNTIME_MODE_KEY = "RUNTIME_MODE_KEY";
     public const string RUNTIME_MODE_CLI = "CLI";
+    public const string RUNTIME_MODE_SERVICE = "SERVICE";
 
     // API
     public const string JOB_URL_PATH = "image-question-jobs";

@@ -3,6 +3,11 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using System.Runtime.InteropServices;
 using WinServicesRAG.Core.Screenshot;
+using WinServicesRAG.Core.Helper;
+using WinServicesRAG.Core.Models;
+using WinServicesRAG.Core.Processing;
+using WinServicesRAG.Core.Services;
+using WinServicesRAG.Core.Value;
 namespace ScreenshotCapture.Handlers;
 
 public static class ServiceHandler
@@ -20,6 +25,9 @@ public static class ServiceHandler
     {
         try
         {
+            // Set runtime mode for service
+            RuntimeDataHelper.SetData(key: CommonValue.RUNTIME_MODE_KEY, value: CommonValue.RUNTIME_MODE_SERVICE);
+            
             // Hide console if requested
             if (hideConsole)
             {
@@ -30,8 +38,14 @@ public static class ServiceHandler
             IHostBuilder hostBuilder = Host.CreateDefaultBuilder()
                 .ConfigureServices(configureDelegate: (context, services) =>
                 {
-                    // Override the screenshot manager registration with a working factory
+                    // Register core services (same as CliHandler)
                     services.AddSingleton<IScreenshotManager, ScreenshotManager>();
+                    services.AddSingleton<IJobProcessingEngine, ScreenshotJobProcessingEngine>();
+
+                    // Configure API client options
+                    services.Configure<ApiClientOptions>(config: context.Configuration.GetSection(key: ApiClientOptions.SectionName));
+                    services.AddSingleton<IApiClient, ApiClient>();
+                    services.AddHttpClient<ApiClient>(); // Register HttpClient for ApiClient
 
                     // Register background service with configuration
                     services.Configure<ScreenshotServiceConfig>(configureOptions: config =>
@@ -42,6 +56,7 @@ public static class ServiceHandler
                     });
                     services.AddHostedService<ScreenshotBackgroundService>();
                 })
+                .UseWindowsService() // Enable Windows Service support
                 .UseSerilog(); // Use Serilog as the logging provider
 
             IHost host = hostBuilder.Build();
