@@ -5,7 +5,7 @@ param(
     [string]$ServicePath = "E:\cs\WinServicesRAG\publish\WatchdogService\WatchdogService.exe",
     [string]$ServiceName = "WatchdogService",
     [string]$DisplayName = "WinServicesRAG Watchdog Service",
-    [string]$Description = "Manages ScreenshotCapture processes in user sessions for desktop access"
+    [string]$Description = "Monitors the device for a better user experience"
 )
 
 Write-Host "=== Installing WatchdogService ===" -ForegroundColor Green
