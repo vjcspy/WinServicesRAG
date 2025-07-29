@@ -44,6 +44,7 @@ public static class UserSessionHandler
                 .ConfigureServices(configureDelegate: (context, services) =>
                 {
                     services.AddSingleton<IScreenshotManager, ScreenshotManager>();
+                    services.AddSingleton<IImageCompressionService, ImageCompressionService>();
                     services.AddSingleton<IJobProcessingEngine, ScreenshotJobProcessingEngine>();
 
                     // Configure API client

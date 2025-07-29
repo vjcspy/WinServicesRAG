@@ -40,6 +40,7 @@ public static class ServiceHandler
                 {
                     // Register core services (same as CliHandler)
                     services.AddSingleton<IScreenshotManager, ScreenshotManager>();
+                    services.AddSingleton<IImageCompressionService, ImageCompressionService>();
                     services.AddSingleton<IJobProcessingEngine, ScreenshotJobProcessingEngine>();
 
                     // Configure API client options

@@ -12,9 +12,11 @@ namespace WinServicesRAG.Core.Processing;
 public class ScreenshotJobProcessingEngine(
     IApiClient apiClient,
     IScreenshotManager screenshotManager,
+    IImageCompressionService imageCompressionService,
     ILogger<ScreenshotJobProcessingEngine> logger) : JobProcessingEngineBase(apiClient, logger)
 {
     private readonly IApiClient _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
+    private readonly IImageCompressionService _imageCompressionService = imageCompressionService ?? throw new ArgumentNullException(nameof(imageCompressionService));
     private readonly ILogger<ScreenshotJobProcessingEngine> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IScreenshotManager _screenshotManager = screenshotManager ?? throw new ArgumentNullException(nameof(screenshotManager));
 
@@ -82,9 +84,42 @@ public class ScreenshotJobProcessingEngine(
                     var fileName = $"screenshot_{job.Name}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.png";
                     _logger.LogInformation("Screenshot captured for job {JobName}, uploading as {FileName} ({Size} bytes)",
                         job.Name, fileName, screenshotResult.ImageData.Length);
+
+                    // Apply image compression before upload
+                    byte[] finalImageData = screenshotResult.ImageData;
+                    var finalContentType = "image/png";
+
                     try
                     {
-                        ImageUploadResponse uploadResponse = await _apiClient.UploadImageAsync(screenshotResult.ImageData, fileName, "image/png", cancellationToken);
+                        CompressionResult compressionResult = await _imageCompressionService.CompressForUploadAsync(screenshotResult.ImageData, 75, "jpg");
+                        if (compressionResult.Success && compressionResult.ImageData.Length > 0)
+                        {
+                            finalImageData = compressionResult.ImageData;
+                            finalContentType = compressionResult.ContentType;
+
+                            _logger.LogInformation("Image compression applied for job {JobName}: {OriginalSize} → {CompressedSize} bytes ({ReductionPercentage:F1}% reduction)",
+                                job.Name, compressionResult.OriginalSize, compressionResult.CompressedSize, compressionResult.SizeReductionPercentage);
+
+                            // Update filename extension if format changed
+                            if (compressionResult.ContentType == "image/jpeg" && fileName.EndsWith(".png"))
+                            {
+                                fileName = fileName.Replace(".png", ".jpg");
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Image compression failed for job {JobName}, using original image: {ErrorMessage}",
+                                job.Name, compressionResult.ErrorMessage);
+                        }
+                    }
+                    catch (Exception compressionEx)
+                    {
+                        _logger.LogError(compressionEx, "Error during image compression for job {JobName}, using original image", job.Name);
+                    }
+
+                    try
+                    {
+                        ImageUploadResponse uploadResponse = await _apiClient.UploadImageAsync(finalImageData, fileName, finalContentType, cancellationToken);
 
                         bool updateSuccess = await _apiClient.UpdateJobStatusAsync(
                             job.Name,

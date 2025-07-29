@@ -23,6 +23,7 @@ public static class CliHandler
                 .ConfigureServices(configureDelegate: (context, services) =>
                 {
                     services.AddSingleton<IScreenshotManager, ScreenshotManager>();
+                    services.AddSingleton<IImageCompressionService, ImageCompressionService>();
                     services.AddSingleton<IJobProcessingEngine, ScreenshotJobProcessingEngine>();
 
                     // THAY ĐỔI: Cách đúng để bind configuration
