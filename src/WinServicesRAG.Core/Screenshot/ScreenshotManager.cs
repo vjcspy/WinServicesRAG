@@ -233,7 +233,8 @@ public class ScreenshotManager : IScreenshotManager
         // 1. DirectX Desktop Duplication API - Best performance and compatibility for Windows 11
         _providers.Add(item: new DirectXScreenshotProvider(logger: _logger));
 
-        // 2. Windows Graphics Capture API - Modern, now implemented and working
+        // 2. GDI (Graphics Device Interface) - Good compatibility for older Windows versions
+        //    Works on Windows 7 and later, but may have performance issues on high DPI
         _providers.Add(item: new GDI(logger: _logger));
 
         // 3. WinAPI (BitBlt) - Fallback, works everywhere but limited capability

@@ -220,7 +220,7 @@ public class DirectXScreenshotProvider(ILogger logger) : IScreenshotProvider
             // Get DXGI device
             using IDXGIDevice dxgiDevice = _device.QueryInterface<IDXGIDevice>();
             using IDXGIAdapter dxgiAdapter = dxgiDevice.GetAdapter();
-
+            Thread.Sleep(200);
             // Get the first output (primary display)
             Result result = dxgiAdapter.EnumOutputs(output: 0, outputOut: out IDXGIOutput? dxgiOutput);
             if (result.Failure || dxgiOutput == null)

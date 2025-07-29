@@ -5,16 +5,12 @@ using System.Runtime.InteropServices;
 namespace WinServicesRAG.Core.Screenshot;
 
 /// <summary>
-///     Windows Graphics Capture API provider.
-///     Modern Windows 10+ API that allows safe and efficient screen recording.
+///     GDI-based screenshot provider.
+///     Traditional Windows GDI API that provides reliable screen capture functionality.
 ///     Implemented using P/Invoke for maximum compatibility with .NET 9.
 /// </summary>
 public class GDI(ILogger logger) : IScreenshotProvider
 {
-
-    // Windows Graphics Capture API constants and structs
-    private const int ERROR_SUCCESS = 0;
-
     // BitBlt constants
     private const int SRCCOPY = 0x00CC0020;
     private bool _isDisposed;
@@ -40,26 +36,27 @@ public class GDI(ILogger logger) : IScreenshotProvider
     {
         try
         {
-            // Check if running on Windows 10 Build 1803+ (10.0.17134)
-            Version version = Environment.OSVersion.Version;
-            if (version.Major < 10 || version.Major == 10 && version.Build < 17134)
+            // Check if running on Windows (GDI is Windows-specific)
+            if (!OperatingSystem.IsWindows())
             {
-                logger.LogWarning(message: "Windows Graphics Capture API requires Windows 10 Build 1803 or later");
+                logger.LogWarning(message: "GDI screenshot provider is only available on Windows");
                 return false;
             }
 
-            // Check if DWM composition is enabled
-            if (DwmIsCompositionEnabled(pfEnabled: out bool isEnabled) == ERROR_SUCCESS && isEnabled)
+            // Basic test to ensure GDI functions are accessible
+            IntPtr desktopWindow = GetDesktopWindow();
+            if (desktopWindow == IntPtr.Zero)
             {
-                logger.LogInformation(message: "Windows Graphics Capture API is available (DWM composition enabled)");
-                return true;
+                logger.LogWarning(message: "GDI screenshot provider cannot access desktop window");
+                return false;
             }
-            logger.LogWarning(message: "Windows Graphics Capture API requires DWM composition to be enabled");
-            return false;
+
+            logger.LogInformation(message: "GDI screenshot provider is available");
+            return true;
         }
         catch (Exception ex)
         {
-            logger.LogError(exception: ex, message: "Error checking Windows Graphics Capture API availability");
+            logger.LogError(exception: ex, message: "Error checking GDI screenshot provider availability");
             return false;
         }
     }
@@ -68,13 +65,13 @@ public class GDI(ILogger logger) : IScreenshotProvider
     {
         if (_isDisposed)
         {
-            logger.LogError(message: "WindowsGraphicsCaptureProvider has been disposed");
+            logger.LogError(message: "GDI screenshot provider has been disposed");
             return null;
         }
 
         try
         {
-            logger.LogDebug(message: "Starting Windows Graphics Capture API screenshot");
+            logger.LogDebug(message: "Starting GDI screenshot capture");
 
             // Get desktop window and its dimensions
             IntPtr desktopWindow = GetDesktopWindow();
@@ -143,7 +140,7 @@ public class GDI(ILogger logger) : IScreenshotProvider
                                 managedBitmap.Save(stream: memoryStream, format: ImageFormat.Png);
                                 byte[] result = memoryStream.ToArray();
 
-                                logger.LogInformation(message: $"Windows Graphics Capture API screenshot completed successfully, size: {result.Length} bytes");
+                                logger.LogInformation(message: $"GDI screenshot completed successfully, size: {result.Length} bytes");
                                 return result;
                             }
                         }
@@ -165,15 +162,12 @@ public class GDI(ILogger logger) : IScreenshotProvider
         }
         catch (Exception ex)
         {
-            logger.LogError(exception: ex, message: "Error taking screenshot with Windows Graphics Capture API");
+            logger.LogError(exception: ex, message: "Error taking screenshot with GDI");
             return null;
         }
     }
 
-    // P/Invoke declarations for Windows Graphics Capture API
-    [DllImport(dllName: "dwmapi.dll", SetLastError = true)]
-    private static extern int DwmIsCompositionEnabled([MarshalAs(unmanagedType: UnmanagedType.Bool)] out bool pfEnabled);
-
+    // P/Invoke declarations for GDI API
     [DllImport(dllName: "user32.dll", SetLastError = true)]
     private static extern IntPtr GetDesktopWindow();
 
