@@ -7,6 +7,7 @@ namespace WinServicesRAG.Core.Screenshot;
 ///     Windows Graphics Capture API provider using native C++ DLL.
 ///     High-performance screen capture with clean borders and modern Windows 10+ API.
 ///     Integrates with ScreenCaptureDLL.dll for optimal performance and compatibility.
+///     Uses direct memory capture for maximum performance.
 /// </summary>
 public class WindowsGraphicsCaptureProvider : IScreenshotProvider, IDisposable
 {
@@ -29,7 +30,10 @@ public class WindowsGraphicsCaptureProvider : IScreenshotProvider, IDisposable
 
     // P/Invoke declarations for ScreenCaptureDLL.dll
     [DllImport("ScreenCaptureDLL.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-    private static extern int CaptureScreenWithOptions([MarshalAs(UnmanagedType.LPWStr)] string outputPath, int hideBorder, int hideCursor);
+    private static extern int CaptureScreenToMemory(out IntPtr outputBuffer, out uint bufferSize, int hideBorder, int hideCursor);
+
+    [DllImport("ScreenCaptureDLL.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void FreeBuffer(IntPtr buffer);
 
     [DllImport("ScreenCaptureDLL.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr GetErrorDescription(int errorCode);
@@ -55,12 +59,12 @@ public class WindowsGraphicsCaptureProvider : IScreenshotProvider, IDisposable
         try
         {
             // Check Windows version requirement (Windows 10 Build 1903+)
-            // var version = Environment.OSVersion.Version;
-            // if (version.Major < 10 || (version.Major == 10 && version.Build < 18362))
-            // {
-            //     _logger?.LogWarning("Windows Graphics Capture API requires Windows 10 Build 1903 or later");
-            //     return false;
-            // }
+            var version = Environment.OSVersion.Version;
+            if (version.Major < 10 || (version.Major == 10 && version.Build < 18362))
+            {
+                _logger?.LogWarning("Windows Graphics Capture API requires Windows 10 Build 1903 or later");
+                return false;
+            }
 
             // Check if DWM composition is enabled
             var dwmResult = DwmIsCompositionEnabled(out bool isEnabled);
@@ -106,40 +110,43 @@ public class WindowsGraphicsCaptureProvider : IScreenshotProvider, IDisposable
 
     public byte[]? TakeScreenshot()
     {
-        _logger?.LogInformation("Taking screenshot using Windows Graphics Capture API (native DLL)");
-        
-        string tempFilePath = string.Empty;
+        _logger?.LogInformation("Taking screenshot using Windows Graphics Capture API (direct memory capture)");
         
         try
         {
-            // Generate temporary file path
-            tempFilePath = Path.Combine(Path.GetTempPath(), $"screenshot_{Guid.NewGuid():N}.png");
+            // Call native DLL memory capture with clean capture settings (hidden border, hidden cursor)
+            var result = (ErrorCode)CaptureScreenToMemory(out IntPtr buffer, out uint bufferSize, hideBorder: 1, hideCursor: 1);
             
-            // Call native DLL with clean capture settings (hidden border, hidden cursor)
-            var result = (ErrorCode)CaptureScreenWithOptions(tempFilePath, hideBorder: 1, hideCursor: 1);
-            
-            if (result == ErrorCode.Success)
+            if (result == ErrorCode.Success && buffer != IntPtr.Zero && bufferSize > 0)
             {
-                // Read the captured file into byte array
-                if (File.Exists(tempFilePath))
+                try
                 {
-                    byte[] imageData = File.ReadAllBytes(tempFilePath);
-                    _logger?.LogInformation("Screenshot captured successfully. Size: {Size} bytes", imageData.Length);
+                    // Copy data from native memory to managed byte array
+                    byte[] imageData = new byte[bufferSize];
+                    Marshal.Copy(buffer, imageData, 0, (int)bufferSize);
+                    
+                    _logger?.LogInformation("Screenshot captured successfully to memory. Size: {Size} bytes", imageData.Length);
                     return imageData;
                 }
-                else
+                finally
                 {
-                    _logger?.LogError("Capture reported success but file was not created: {Path}", tempFilePath);
-                    return null;
+                    // Always free the native buffer
+                    FreeBuffer(buffer);
                 }
             }
             else
             {
+                // Free buffer even on error (if allocated)
+                if (buffer != IntPtr.Zero)
+                {
+                    FreeBuffer(buffer);
+                }
+                
                 // Get error description from DLL
                 var errorPtr = GetErrorDescription((int)result);
                 string errorDesc = errorPtr != IntPtr.Zero ? Marshal.PtrToStringUni(errorPtr) ?? result.ToString() : result.ToString();
                 
-                _logger?.LogError("Screenshot capture failed. Error: {ErrorCode} - {Description}", result, errorDesc);
+                _logger?.LogError("Screenshot memory capture failed. Error: {ErrorCode} - {Description}", result, errorDesc);
                 
                 // Log specific guidance for common errors
                 if (result == ErrorCode.TimeoutError)
@@ -157,23 +164,8 @@ public class WindowsGraphicsCaptureProvider : IScreenshotProvider, IDisposable
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Unexpected error during Windows Graphics Capture API screenshot");
+            _logger?.LogError(ex, "Unexpected error during Windows Graphics Capture API memory capture");
             return null;
-        }
-        finally
-        {
-            // Clean up temporary file
-            try
-            {
-                if (!string.IsNullOrEmpty(tempFilePath) && File.Exists(tempFilePath))
-                {
-                    File.Delete(tempFilePath);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "Failed to delete temporary screenshot file: {Path}", tempFilePath);
-            }
         }
     }
 
