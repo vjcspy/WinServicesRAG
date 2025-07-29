@@ -80,7 +80,7 @@ dotnet build --configuration Release
 
 # Publish ScreenshotCapture
 cd src\ScreenshotCapture
-dotnet publish -c Release --self-contained false --output "..\..\publish\ScreenshotService"
+dotnet publish -c Release --self-contained false --output ..\..\publish\ScreenshotService
 ```
 
 ##### Install Windows Service
