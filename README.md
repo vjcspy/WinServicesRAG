@@ -52,9 +52,10 @@ This project aims to build an extremely stable and tamper-resistant Windows moni
                 │ - Debugging Interface                │
                 │                                      │
                 │ Screenshot Technologies:             │
+                │ - Windows Graphics Capture API (WGC) │
                 │ - DirectX Desktop Duplication API    │
+                │ - GDI (Graphics Device Interface)    │
                 │ - WinAPI (BitBlt + PrintWindow)      │
-                │ - Windows Graphics Capture API       │
                 └──────────────────────────────────────┘
                                   ▲
                                   │
@@ -116,15 +117,16 @@ The unified ScreenshotCapture service includes comprehensive protection:
 
 ### Technology Stack (Updated for Windows 11)
 
-* **Language:** C# (.NET 9)
+* **Language:** C# (.NET 9) + C++ (Native DLL)
 * **Framework:** ASP.NET Core Worker Service
 * **Libraries:**
    * **TopShelf:** For easily creating and managing Windows Services.
    * **System.Reactive (Rx.NET):** For handling asynchronous data streams and API polling.
    * **HttpClientFactory:** For efficient management of HTTP connections.
    * **Serilog/NLog:** For detailed logging.
-   * **P/Invoke (DllImport):** For interacting with Windows APIs.
+   * **P/Invoke (DllImport):** For interacting with Windows APIs and native DLLs.
    * **Vortice.Windows:** Modern DirectX wrapper for .NET (replaces obsolete SharpDX).
+   * **ScreenCaptureDLL.dll:** Native C++ DLL implementing Windows Graphics Capture API with clean borders.
    * **Microsoft.Extensions.Logging:** For comprehensive logging throughout all services.
 
 -----
@@ -184,26 +186,28 @@ This unified service implements all business logic, API communication, and scree
    **Architecture Implementation:** Successfully implemented as a unified service with comprehensive capabilities.
 
    - [x] **Enhanced Screenshot Implementation:**
-      - [x] **DirectX Desktop Duplication API (Vortice.Windows)** - Primary provider, optimized for Windows 11
-      - [x] **WinAPI (BitBlt + PrintWindow)** - Reliable fallback, works on all Windows versions  
-      - [x] **Windows Graphics Capture API Placeholder** - Future implementation when .NET compatibility improves
+      - [x] **Windows Graphics Capture API (WGC)** - Primary provider using native C++ DLL, clean borders, modern Windows 10+ API
+      - [x] **DirectX Desktop Duplication API (Vortice.Windows)** - High-performance provider, optimized for Windows 11
+      - [x] **GDI (Graphics Device Interface)** - Good compatibility for older Windows versions
+      - [x] **WinAPI (BitBlt + PrintWindow)** - Reliable fallback, works on all Windows versions
       - [x] **Fallback Strategy:** Automatic provider selection with graceful degradation
    
    - [x] **Comprehensive Features Implemented:**
       - [x] **Service Mode**: Full Windows Service implementation with job processing
       - [x] **CLI Mode**: Interactive testing and debugging (`dotnet run -- cli --help`)
       - [x] Provider status checking (`dotnet run -- cli --status`)
-      - [x] Manual provider selection (`dotnet run -- cli --provider "WinAPI"`)
+      - [x] Manual provider selection (`dotnet run -- cli --provider "WGC"`)
       - [x] Verbose logging support for comprehensive troubleshooting
       - [x] Advanced error handling and retry mechanisms
-      - [x] Modern .NET 9 compatibility with Vortice.Windows DirectX wrapper
+      - [x] Modern .NET 9 compatibility with native C++ DLL integration
       - [x] Async API integration with `IScreenshotManager` interface
       - [x] Enhanced `ScreenshotResult` model with detailed error information
    
    - [x] **Test Results (Windows 11):**
+      - [x] ✅ Windows Graphics Capture API (WGC): Available and working, clean border-free screenshots via native DLL
       - [x] ✅ DirectX Desktop Duplication API: Available in user session, high performance
+      - [x] ✅ GDI: Available and working for compatibility scenarios
       - [x] ✅ WinAPI (BitBlt): Available and working, produced optimized screenshots
-      - [x] ⚠️ Windows Graphics Capture API: Disabled due to .NET Runtime compatibility issues
       - [x] ✅ Automatic provider fallback working correctly
       - [x] ✅ CLI testing interface functional and user-friendly
       - [x] ✅ Service mode operational with full job processing

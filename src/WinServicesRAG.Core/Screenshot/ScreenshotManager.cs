@@ -230,14 +230,17 @@ public class ScreenshotManager : IScreenshotManager
     private void InitializeProviders()
     {
         // Add providers in order of preference
-        // 1. DirectX Desktop Duplication API - Best performance and compatibility for Windows 11
+        // 1. Windows Graphics Capture API - Modern Windows 10+ API with clean borders
+        _providers.Add(item: new WindowsGraphicsCaptureProvider(logger: _logger));
+
+        // 2. DirectX Desktop Duplication API - Best performance and compatibility for Windows 11
         _providers.Add(item: new DirectXScreenshotProvider(logger: _logger));
 
-        // 2. GDI (Graphics Device Interface) - Good compatibility for older Windows versions
+        // 3. GDI (Graphics Device Interface) - Good compatibility for older Windows versions
         //    Works on Windows 7 and later, but may have performance issues on high DPI
         _providers.Add(item: new GDI(logger: _logger));
 
-        // 3. WinAPI (BitBlt) - Fallback, works everywhere but limited capability
+        // 4. WinAPI (BitBlt) - Fallback, works everywhere but limited capability
         _providers.Add(item: new WinApiScreenshotProvider(logger: _logger));
 
         _logger.LogInformation(message: "Initialized {ProviderCount} screenshot providers", _providers.Count);

@@ -7,6 +7,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,6 +31,15 @@
     <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
   </ItemGroup>
+  
+  <!-- Native DLL for Windows Graphics Capture API -->
+  <ItemGroup>
+    <None Include="native\ScreenCaptureDLL.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Link>ScreenCaptureDLL.dll</Link>
+    </None>
+  </ItemGroup>
+  
   <PropertyGroup>
     <NoWarn>$(NoWarn);1591;CA1416</NoWarn>
   </PropertyGroup>
