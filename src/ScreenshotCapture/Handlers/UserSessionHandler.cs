@@ -60,7 +60,7 @@ public static class UserSessionHandler
             IScreenshotManager screenshotManager = host.Services.GetRequiredService<IScreenshotManager>();
 
             // Show provider status for user session
-            await ShowProviderStatusInUserSession(logger, screenshotManager, sessionId);
+            // await ShowProviderStatusInUserSession(logger, screenshotManager, sessionId);
 
             // Start job processing in user session mode
             logger.LogInformation("Starting job processing in user session {SessionId}...", sessionId);
