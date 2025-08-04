@@ -4,11 +4,11 @@
 param(
     [string]$ServicePath = "E:\cs\WinServicesRAG\publish\WatchdogService\WatchdogService.exe",
     [string]$ServiceName = "WatchdogService",
-    [string]$DisplayName = "WinServicesRAG Watchdog Service",
-    [string]$Description = "Monitors the device for a better user experience"
+    [string]$DisplayName = "Windows System Monitoring Watchdog Service", 
+    [string]$Description = "Monitors Windows system components for enhanced system reliability and performance"
 )
 
-Write-Host "=== Installing WatchdogService ===" -ForegroundColor Green
+Write-Host "=== Installing Windows System Monitoring Watchdog Service ===" -ForegroundColor Green
 Write-Host "Service Path: $ServicePath" -ForegroundColor Yellow
 Write-Host "Service Name: $ServiceName" -ForegroundColor Yellow
 
@@ -21,12 +21,37 @@ if ($existingService) {
     Start-Sleep -Seconds 2
 }
 
-# Check if executable exists
+# Always build both services to ensure latest version
+Write-Host "Building services..." -ForegroundColor Yellow
+
+# Build and publish WatchdogService
+Write-Host "Building WatchdogService..." -ForegroundColor Cyan
+cd src\WatchdogService
+dotnet publish -c Release --output ..\..\publish\WatchdogService
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to build WatchdogService"
+    exit 1
+}
+
+# Build and publish ScreenshotCapture (SystemMonitor.exe)
+Write-Host "Building SystemMonitor..." -ForegroundColor Cyan
+cd ..\ScreenshotCapture
+dotnet publish -c Release --output ..\..\publish\ScreenshotService
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to build SystemMonitor"
+    exit 1
+}
+
+# Return to script directory
+cd ..\..
+
+Write-Host "✅ Build completed successfully" -ForegroundColor Green
+
+# Verify executable exists after build
 if (-not (Test-Path $ServicePath)) {
-    Write-Error "Service executable not found: $ServicePath"
-    Write-Host "Please build and publish the WatchdogService first:" -ForegroundColor Red
-    Write-Host "  cd src\WatchdogService" -ForegroundColor Red
-    Write-Host "  dotnet publish -c Release --output ..\..\publish\WatchdogService" -ForegroundColor Red
+    Write-Error "Service executable not found after build: $ServicePath"
     exit 1
 }
 
@@ -60,13 +85,15 @@ if ($LASTEXITCODE -eq 0) {
         Write-Host "Next steps:" -ForegroundColor Yellow
         Write-Host "1. Check service logs: D:\Documents\Temporary\WinServicesRAG\logs\watchdog-service-*.log" -ForegroundColor White
         Write-Host "2. Monitor service status: Get-Service $ServiceName" -ForegroundColor White
-        Write-Host "3. Login as user to test ScreenshotCapture spawning" -ForegroundColor White
+        Write-Host "3. Login as user to test SystemMonitor spawning" -ForegroundColor White
         Write-Host "4. Check Event Log: Get-EventLog -LogName Application -Source WatchdogService" -ForegroundColor White
-    } else {
+    }
+    else {
         Write-Error "Failed to start service. Check logs for details."
         sc.exe query $ServiceName
     }
-} else {
+}
+else {
     Write-Error "Failed to create service"
     Write-Host "Error details:" -ForegroundColor Red
     Write-Host $result -ForegroundColor Red

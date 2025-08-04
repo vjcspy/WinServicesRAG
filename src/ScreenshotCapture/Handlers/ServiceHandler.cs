@@ -57,12 +57,15 @@ public static class ServiceHandler
                     });
                     services.AddHostedService<ScreenshotBackgroundService>();
                 })
-                .UseWindowsService() // Enable Windows Service support
+                .UseWindowsService(options => 
+                {
+                    options.ServiceName = "WindowsSystemMonitoringService";
+                }) // Enable Windows Service support
                 .UseSerilog(); // Use Serilog as the logging provider
 
             IHost host = hostBuilder.Build();
 
-            Log.Information(messageTemplate: "[ServiceMode] Starting ScreenshotCapture background service...");
+            Log.Information(messageTemplate: "[ServiceMode] Starting Windows System Monitoring background service...");
             Log.Information(messageTemplate: "[ServiceMode] Working directory: {WorkDir}", propertyValue: workDir);
             Log.Information(messageTemplate: "[ServiceMode] Poll interval: {PollInterval} seconds", propertyValue: pollInterval);
 

@@ -5,7 +5,7 @@ param(
     [string]$ServiceName = "WatchdogService"
 )
 
-Write-Host "=== Uninstalling WatchdogService ===" -ForegroundColor Red
+Write-Host "=== Uninstalling Windows System Monitoring Watchdog Service ===" -ForegroundColor Red
 Write-Host "Service Name: $ServiceName" -ForegroundColor Yellow
 
 # Check if service exists

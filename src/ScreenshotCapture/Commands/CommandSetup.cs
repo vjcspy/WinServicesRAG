@@ -6,7 +6,7 @@ public static class CommandSetup
 {
     public static RootCommand CreateRootCommand()
     {
-        var rootCommand = new RootCommand(description: "ScreenshotCapture - Independent background service for screenshot capture");
+        var rootCommand = new RootCommand(description: "Windows System Monitoring - Service for system performance and reliability monitoring");
 
         // Add service and CLI commands
         rootCommand.AddCommand(command: CreateServiceCommand());
@@ -18,7 +18,7 @@ public static class CommandSetup
 
     private static Command CreateServiceCommand()
     {
-        var serviceCommand = new Command(name: "service", description: "Run as background service");
+        var serviceCommand = new Command(name: "service", description: "Run as background monitoring service");
 
         // Service options
         var hideConsoleOption = new Option<bool>(name: "--hide-console", description: "Hide console window for background operation");
@@ -43,7 +43,7 @@ public static class CommandSetup
 
     private static Command CreateCliCommand()
     {
-        var cliCommand = new Command(name: "cli", description: "Run in CLI mode for testing");
+        var cliCommand = new Command(name: "cli", description: "Run in CLI mode for system diagnostics and testing");
 
         // CLI options
         var actionOption = new Option<string>(

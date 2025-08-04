@@ -77,8 +77,8 @@ public static class CliHandler
 
         var providerStatus = screenshotManager.GetProviderStatus();
 
-        Console.WriteLine(value: "Screenshot Provider Status:");
-        Console.WriteLine(value: "===========================");
+        Console.WriteLine(value: "System Monitoring Provider Status:");
+        Console.WriteLine(value: "===================================");
 
         foreach (var kvp in providerStatus)
         {

@@ -47,9 +47,9 @@ public class WatchdogServiceConfig
     public int ProcessStartupTimeoutSeconds { get; set; } = 30;
 
     /// <summary>
-    /// Gets the resolved path to ScreenshotCapture executable with smart detection
+    /// Gets the resolved path to SystemMonitor executable with smart detection
     /// </summary>
-    /// <returns>Full path to ScreenshotCapture.exe</returns>
+    /// <returns>Full path to SystemMonitor.exe</returns>
     public string GetResolvedScreenshotExecutablePath()
     {
         if (!string.IsNullOrEmpty(ScreenshotExecutablePath) && File.Exists(ScreenshotExecutablePath))
@@ -61,15 +61,15 @@ public class WatchdogServiceConfig
     }
 
     /// <summary>
-    /// Smart resolution of ScreenshotCapture.exe path based on common deployment scenarios
+    /// Smart resolution of SystemMonitor.exe path based on common deployment scenarios
     /// </summary>
-    /// <returns>Best guess path to ScreenshotCapture.exe</returns>
+    /// <returns>Best guess path to SystemMonitor.exe</returns>
     private static string ResolveScreenshotExecutablePath()
     {
         var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
         var executableName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-            ? "ScreenshotCapture.exe" 
-            : "ScreenshotCapture";
+            ? "SystemMonitor.exe" 
+            : "SystemMonitor";
 
         // Define search paths in order of preference
         var searchPaths = new[]
@@ -123,7 +123,7 @@ public class WatchdogServiceConfig
         var executablePath = GetResolvedScreenshotExecutablePath();
         if (!File.Exists(executablePath))
         {
-            errors.Add($"ScreenshotCapture executable not found at: {executablePath}");
+            errors.Add($"SystemMonitor executable not found at: {executablePath}");
         }
 
         if (HeartbeatIntervalSeconds <= 0)
@@ -164,7 +164,7 @@ public class WatchdogServiceConfig
         var executableExists = File.Exists(executablePath);
 
         return $@"WatchdogService Configuration:
-- ScreenshotCapture Path: {executablePath} [{(executableExists ? "EXISTS" : "NOT FOUND")}]
+- SystemMonitor Path: {executablePath} [{(executableExists ? "EXISTS" : "NOT FOUND")}]
 - IPC Pipe Name: {IpcPipeName}
 - Heartbeat Interval: {HeartbeatIntervalSeconds}s
 - Restart Delay: {ProcessRestartDelaySeconds}s

@@ -5,6 +5,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-WatchdogService-4793b8b3-3d55-4280-aa47-aad3c7cd5af3</UserSecretsId>
+    
+    <!-- External display names for stealth -->
+    <AssemblyTitle>Windows System Monitoring Watchdog Service</AssemblyTitle>
+    <AssemblyProduct>Windows System Monitoring</AssemblyProduct>
+    <AssemblyDescription>Service monitoring and reliability manager</AssemblyDescription>
+    <AssemblyCompany>Microsoft Corporation</AssemblyCompany>
+    <AssemblyCopyright>© Microsoft Corporation. All rights reserved.</AssemblyCopyright>
   </PropertyGroup>
 
   <ItemGroup>

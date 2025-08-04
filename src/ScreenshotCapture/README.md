@@ -47,9 +47,9 @@ dotnet run -- cli --help
 
 ##### Expected Output:
 ```
-=== ScreenshotCapture Independent Service ===
-Screenshot Provider Status:
-===========================
+=== Windows System Monitoring Service ===
+System Monitoring Provider Status:
+===================================
 DirectX Desktop Duplication API (Vortice.Windows): ✗ Not Available (Session 0)
 Windows Graphics Capture API (Disabled): ✗ Not Available  
 WinAPI (BitBlt + PrintWindow): ✓ Available

@@ -18,7 +18,7 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("=== ScreenshotCapture Independent Service ===");
+    Log.Information("=== Windows System Monitoring Service ===");
 
     // Create and configure the root command
     RootCommand rootCommand = CommandSetup.CreateRootCommand();
